@@ -1,39 +1,60 @@
 
+from multiprocessing.sharedctypes import Value
 from typing import Type
-from poker import Hand, Card, Rank, Combo, Suit, Range
-import random
+from poker import Hand, Card, Rank, Combo, Suit, Range, hand
+from random import shuffle, randint, uniform, choice
 from itertools import cycle
+from operator import attrgetter, truediv
 
 score_to_rank = {1:'high card', 2:'pair', 3:'two pair', 4:'three of a kind', 5:'straight', 6:'flush', 7:'full house', 8:'four of a kind', 9:'straight flush', 10:'royal flush'}
-positions = {1:'Dealer',2:'Small blind',3:'Big blind',4:'UTG',5:'UTG+1',6:'Cutoff'}
+BASE_HAND_RANGE = list(Range('XX').combos)
+BASE_HAND_RANGE.sort()
 
-class Tournament():
+class Game():
 
-    def __init__(self, bb_doubling_speed, starting_chips=20000):
-        p1, p2, p3, p4, p5, p6 = RangePlayer('Player 1'), RandomPlayer('Player 2'), RandomPlayer('Player 3'), RandomPlayer('Player 4'), RandomPlayer('Player 5'), RandomPlayer('Player 6')
+    def __init__(self, tournament, small_blind, max_hands, iplayerList, starting_chips=20000):
+        '''
+        Initialise the tournament.
+        bb_doubling_speed: How quickly the tournament progresses. Doubling speed of 20 = big blind doubles every 20 hands.
+        starting_chips: How many poker chips each player starts with.
+        '''
+        p1, p2, p3, p4, p5, p6 = playerList
         self.players = [p1, p2, p3, p4, p5, p6]
         self.players_in_hand = []
-        random.shuffle(self.players)
-        self.player_pool = cycle(self.players)
+        self.out_players = []
+        shuffle(self.players)
+        self.table_positions = cycle(self.players)
+        #self.player_pool = self.table_positions
         self.deck = list(Card)
         self.pot = 0
         self.start_chips = starting_chips
         for p in self.players:
             p.stack = self.start_chips
-        self.bb = 10
-        self.sb = 5
-        self.tournament_over = False
-        self.hand_count = -1
-        self.showdown_count = 0
-        self.community_cards = []
+        self.bb, self.sb = small_blind * 2, small_blind
+        self.hand_count, self.showdown_count = 0, 0
+        self.community_cards,  self.chip_history = [], []
         self.winner = None
         self.win_percents = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0}
-        self.bb_doubling_speed = bb_doubling_speed
-        self.chip_history = []
+        if tournament:
+            self.bb_doubling_speed = 10
+        else:
+            self.bb_doubling_speed = max_hands
+        self.human_player = p2
+        self.max_hands = max_hands
+    
+    def assign_bot_strategy(self, strategy):
+        for p in self.players:
+            if p.bot:
+                p.assignStrategy(strategy)
+
 
     def begin(self):
+        '''
+        Start the tournament.
+        '''
         while not self.is_tournament_over():
             #new round
+            
             print('HAND #%i' % self.hand_count)
             if (self.hand_count+2) % self.bb_doubling_speed == 0:
                 self.bb *= 2
@@ -42,45 +63,63 @@ class Tournament():
             for p in self.players:
                 print('%s has stack size of %i.' % (p.name, p.stack))
                 stacktotal += p.stack
-            print('stack total = %i, should be %i' % (stacktotal, self.start_chips * len(self.players)))
+            print('stack total = %i, should be %i' % (stacktotal, self.start_chips * 6))
             if stacktotal != self.start_chips * len(self.players):
+                pass
                 print('error in chips')
             self.begin_action()
-            
+            self.hand_count += 1
+            if self.hand_count == self.max_hands:
+                break
+        ### When the game ends, put all players back into the player list for evaluation
+        for p in self.out_players:
+            if p not in self.players:
+                self.players.append(p)
+        print("Tournament over!")
+        print(self.hand_count)
 
     def get_hand_count(self):
+        '''
+        Returns the hand count
+        '''
         return self.hand_count + 1
 
     def get_winner(self):
         return self.winner
 
     def is_tournament_over(self):
-        out = 0
+        '''
+        Returns true if every player's stack is equal to zero (bar one).
+        '''
+        out=0
         for p in self.players:
             if p.stack == 0:
-                out += 1
-        if out == 5:
+                out+=1
+        if out == len(self.players) - 1:
             self.winner = [w for w in self.players if w.stack != 0][0]
-            
             return True
         else:
-            return self.tournament_over
+            return False
 
     def begin_action(self):
-        
+        '''
+        Start the hand action.
+        '''
+        positions = {1:'Dealer',2:'Small blind',3:'Big blind',4:'UTG',5:'UTG+1',6:'Cutoff'}
         self.chip_history.append(self.update_player_chips())
         self.pot = 0
         self.deck = list(Card)
-        self.hand_count += 1
+        self.community_cards =  []
         self.new_hand()
-        self.populate_player_pool(True)
+        self.update_in_tournament()
+        self.table_positions = cycle(self.players)
 
         if self.hand_count != 0:
-            for i in range((self.hand_count-1 % 6)):
-                next(self.player_pool)
-
-        for i in range(1, len(self.players_in_hand) + 1):
-            player = next(self.player_pool)
+            for i in range((self.hand_count % 6)):
+                next(self.table_positions)
+        hand_player_pool = self.table_positions
+        for i in range(1, len(self.players) + 1):
+            player = next(hand_player_pool)
             player.position = positions[i]
             if player.position == 'Big blind':
                 self.pot += self.bb
@@ -90,158 +129,186 @@ class Tournament():
                 player.add_to_pot(self.sb)
 
         print('Shuffling')
-        random.shuffle(self.deck)
+        shuffle(self.deck)
         print('Dealing')
-        for i in range(1, len(self.players_in_hand) + 1):
+        for i in range(1, len(self.players) + 1):
 
-            to_deal = next(self.player_pool)
+            to_deal = next(hand_player_pool)
             to_deal.deal(self.deck.pop(), self.deck.pop())
+            #if to_deal == self.human_player:
             print(to_deal.name + ' is ' + to_deal.position + ', dealt: ' + str(to_deal.hand), end='')
             print('')
+        
+        ## We've looped through each player and dealt them a card, and NEXT is now dealer, we need NEXT to be UTG
         for i in range(3):
-            next(self.player_pool)
+            next(hand_player_pool)
+
         print('Beginning action. Pot = ' + str(self.pot))
         #preflop
-        self.action_loop(True)
-        self.populate_player_pool()
-        if len(self.players_in_hand) == 1:
-            self.hand_won(self.players_in_hand[0])
-        elif self.tournament_over:
-            print('tournament is over')
-        else:
-            self.begin_round_stages('FLOP')
+        self.begin_round_stages(0, hand_player_pool)
 
     def get_player_history(self, p_name):
         players_chip_history = []
-        for p in self.players:
-            if p.name == p_name:
-                player = p
-        for hand in self.chip_history:
-            players_chip_history.append(hand[player])
+        player = [p for p in self.players if p.name == p_name][0]
+
+        players_chip_history = [h[player] for h in self.chip_history]
         return players_chip_history
                 
     def update_player_chips(self):
         player_chips = {}
         for p in self.players:
             player_chips[p] = p.stack
+        
         return player_chips
 
-    def begin_round_stages(self, p_round):
-        if p_round == 'FLOP':
-            next_round = 'TURN'
-        elif p_round == 'TURN':
-            next_round = 'RIVER'
-        else:
-            next_round = 'SHOWDOWN'
+    def update_in_tournament(self):
+        new_players = []
+        for p in self.players:
+            if not p.out_of_tournament:
+                new_players.append(p)
+            elif p.out_of_tournament and p not in self.out_players:
+                self.out_players.append(p)
+        self.players = new_players
 
-        if p_round == 'SHOWDOWN':
-            print(p_round)
-            p_left = [p for p in self.players_in_hand if not p.out]
-
-            winners, score = self.showdown(p_left)
-            if len(winners) == 1:
-                print('%s wins with hand: %s %s' % (winners[0].name, score_to_rank[score], winners[0].win_combo))
-                winners[0].stack += self.pot
-                
-                for p in p_left:
-                    if p.stack == 0 and p != winners[0]:
-                        p.out_of_tournament = True
-            else:
-                # TODO: Must have a way to deal with side pots
-                print('chop pot!')
-                each_gain = self.pot / len(p_left)
-                if int(each_gain) < each_gain:
-                    flip_for = round(each_gain) - int(each_gain)
-                else:
-                    flip_for = 0
-                flip = random.randint(1, len(p_left))
-                for p in winners:
-                    if winners.index(p) == flip:
-                        p.stack += flip_for
-                    p.stack += int(each_gain)
-                print(winners)
-        else:
-            print('')
-            print('%s: ' % p_round, end='')
-            if p_round == 'FLOP':
+    def begin_round_stages(self, p_round, players):
+        players_left = len(self.players)
+        showdown = False
+        while not showdown:
+            is_preflop = False
+            if p_round == 0:
+                #preflop
+                is_preflop = True
+            elif p_round == 1:
+                #flop
+                print('FLOP: ')
                 self.community_cards = [self.deck.pop() for __ in range(3)]
-            else:
+            elif p_round == 2 or p_round == 3:
+                #turn
+                if p_round == 2:
+                    pass
+                    print('TURN: ')
+                else:
+                    pass
+                    print('RIVER: ')
                 self.community_cards.append(self.deck.pop())
-            print(' '.join(str(c) for c in self.community_cards))
-            print('')
-            total_money = 0
-            for p in self.players:
-                total_money += p.stack
-            print(total_money)
-            self.action_loop()
-            self.populate_player_pool()
-            if len(self.players_in_hand) == 1:
-                # the winner will be the next to act
-                self.hand_won(self.players_in_hand[0])
-            elif self.all_in_showdown():
-                if p_round == 'FLOP':
+            else:
+                showdown = True
+                break
+            if not is_preflop:
+                pass
+                print('')
+                print('%s: ' % p_round, end='')
+                print(' '.join(str(c) for c in self.community_cards))
+                print('')
+            self.assign_bot_strategy([[20,10,100],[1,2,100],[2,3,100],[3,4,100]])
+            self.action_loop(players_left, players, p_round)
+            players_left = len([x for x in self.players if x.out == False])
+            players = cycle(self.populate_player_pool(players))
+            
+
+            if players_left == 1:
+                for i in range(1):
+                    p_won = next(players)
+                #p_won = next(players)
+                self.hand_won(p_won)
+                break
+            elif self.all_in_showdown(players_left):
+                if p_round == 0:
+                    self.community_cards.append(self.deck.pop())
+                    self.community_cards.append(self.deck.pop())
+                    self.community_cards.append(self.deck.pop())
+                    self.community_cards.append(self.deck.pop())
+                    self.community_cards.append(self.deck.pop())
+                elif p_round == 1:
                     self.community_cards.append(self.deck.pop())
                     print('TURN: %s' % ' '.join(str(c) for c in self.community_cards))
                     self.community_cards.append(self.deck.pop())
                     print('RIVER: %s'% ' '.join(str(c) for c in self.community_cards))
-                elif p_round == 'TURN':
+                elif p_round == 2:
                     self.community_cards.append(self.deck.pop())
                     print('RIVER: %s'% ' '.join(str(c) for c in self.community_cards))
-                self.begin_round_stages('SHOWDOWN')
-            else:
-                self.begin_round_stages(next_round)
+                showdown = True
+                break
+            p_round += 1
+        if self.is_tournament_over():
+            pass
+        elif showdown:
+            self.calculate_showdown()
 
-    def all_in_showdown(self):
+    def calculate_showdown(self):
+        p_left = [p for p in self.players if not p.out]
+        winners, score = self.showdown(p_left)
+        if len(winners) == 1:
+            print('%s wins with hand: %s %s' % (winners[0].name, score_to_rank[score], winners[0].winning_hand))
+            winners[0].stack += self.pot
+            
+            for p in p_left:
+                if p.stack == 0 and p != winners[0]:
+                    p.out_of_tournament = True
+        else:
+            # TODO: Must have a way to deal with side pots
+            print('chop pot!')
+            each_gain = self.pot / len(p_left)
+            if int(each_gain) < each_gain:
+                flip_for = round(each_gain) - int(each_gain)
+            else:
+                flip_for = 0
+            flip = randint(1, len(p_left))
+            for p in winners:
+                if winners.index(p) == flip:
+                    p.stack += flip_for
+                p.stack += int(each_gain)
+            print(winners)
+
+    def all_in_showdown(self, players_left):
         all_in = 0
-        for p in self.players_in_hand:
+        for p in self.players:
             if p.all_in:
                 all_in +=1
-        if len(self.players_in_hand) - all_in < 2:
+        if players_left - all_in < 2:
             return True
         else:
             return False
 
-    def populate_player_pool(self, newround=False):
-        self.players_in_hand = []
-        out_of_tournament = 0
+    def populate_player_pool(self, players, newround=False):
+        '''
+        Function that, for each part of the action, will repopulate the player 'pool' (cycle) for the correct order with
+        whoever is in the hand.
+        
+        Params:
+        newround (default=False): declares whether the round is starting anew
+        '''
+        players_in_hand = []
         for p in self.players:
             p.on_table = 0
-            if not p.out_of_tournament:
-                if not p.out or newround:
-                    self.players_in_hand.append(p)
-            else:
-                out_of_tournament += 1
-        if out_of_tournament == 5:
-            self.tournament_over = True
+            if not p.out_of_tournament and not p.out:
+                players_in_hand.append(p)
         else:
-            self.player_pool = cycle(self.players_in_hand)
-            if self.players_in_hand[0].position == 'Dealer':
-                next(self.player_pool)
+            return players_in_hand
 
     def new_hand(self):
         for p in self.players:
             if p.stack != 0:
                 p.out = False
 
-    def action_loop(self, preflop=False):
-        if preflop:
+    def action_loop(self,players_left,players, p_round):
+        if p_round == 0:
             current_bet = self.bb
         else:
             current_bet = 0
         min_bet = self.bb
 
-        action_left = len(self.players_in_hand)
-        out = 6 - action_left
+        action_left = players_left
+        out = len(self.players) - action_left
         all_in = 0
         to_return = 0
         while action_left > 0:
-            player_to_act = next(self.player_pool)
+            player_to_act = next(players)
         
             if not player_to_act.out and player_to_act.stack > 0:
                 print('%s to act...' % player_to_act.position)
-                
-                action_type = player_to_act.get_action_type(current_bet, preflop)
-                amount = player_to_act.get_action_amount(action_type, min_bet, current_bet)
+                action_type, amount = player_to_act.get_action_type_and_amount(current_bet, p_round, self.community_cards)
+                #amount = player_to_act.get_action_amount(action_type, min_bet, current_bet)
 
                 if action_type == 1:
                     #fold
@@ -293,14 +360,15 @@ class Tournament():
             if player_to_act.stack == 0:
                 player_to_act.all_in = True
                 all_in +=1
-            if len(self.players_in_hand) - all_in < 2:
+            if players_left - all_in < 2:
                 break
-            if out == 5:
+            if out == len(self.players) - 1:
+                print('caught')
                 break
-            if len(self.players_in_hand) - all_in == 1:
+            if players_left - all_in == 1:
                 #if everyone has gone all in to call bar 1 person who has enough to chips to cover, the amount they have on the table should be returned6
                 better.add_to_stack(to_return)
-        print('Round over, %s players left, %i in the pot' % (str(6 - out), self.pot))
+        print('Round over, %s players left, %i in the pot' % (str(len(self.players) - out), self.pot))
         
     def hand_won(self, player):
         print('%s wins the hand' % player.position)
@@ -308,8 +376,11 @@ class Tournament():
         player.add_to_stack(self.pot)
 
     def showdown(self, players):
-        
+        score_to_kicker = {1:4,2:3,3:1,4:2,5:0,6:4,7:0,8:1,9:0}
         player_score = {}
+        if len(players) == 0:
+            raise ValueError('No players given for showdown')
+        
         for p in players:
             hole_and_community = p.get_hand() + self.community_cards
             player_score[p] = self.get_highest_combo(hole_and_community)
@@ -319,103 +390,146 @@ class Tournament():
         
         # if there is more than one person with the winning hand, check for highest card
         if sum(value == player_score[p_win] for value in player_score.values()) > 1:
+            
+            winner_score = max(player_score.values())
+            kickers_to_check = score_to_kicker[winner_score]
             #list of players also with that hand
             winners = [p for p in player_score.keys() if player_score[p]==p_score]
-        
+
+            ### reworking
             same_hand = False
             same_handed = []
             #calculate the highest card that makes each winning hand a winner
             for winner in winners:
+                cards = winner.get_hand() + self.community_cards
                 if p_score == 1:
-                    winner.win_combo = max(winner.get_hand() + self.community_cards).rank
+                    winner.win_combo = max(cards).rank
+                    winner.winning_hand = winner.win_combo
                 elif p_score == 2:
-                    winner.win_combo = max(self.get_x_of_a_kind(winner.get_hand() + self.community_cards, 2))
+                    winner.win_combo = max(self.get_x_of_a_kind(cards, 2))
+                    winner.winning_hand = winner.win_combo
                 elif p_score == 3:
-                    pairs = self.get_two_pair(winner.get_hand() + self.community_cards)
+                    pairs = self.get_two_pair(cards)
                     pairs.sort()
                     pairs.reverse()
                     new_pairs =[pairs[0], pairs[1]]
                     winner.win_combo = new_pairs
+                    winner.winning_hand = winner.win_combo
                 elif p_score == 4:
-                    winner.win_combo = max(self.get_x_of_a_kind(winner.get_hand() + self.community_cards, 3))
+                    winner.win_combo = max(self.get_x_of_a_kind(cards, 3))
+                    winner.winning_hand = winner.win_combo
                 elif p_score == 5:
-                    winner.win_combo = max(self.get_straight(winner.get_hand() + self.community_cards))
+                    winner.win_combo = max(self.get_straight(cards))
+                    winner.winning_hand = winner.win_combo
                 elif p_score == 6:
-                    winner.win_combo = max(self.get_flush(winner.get_hand() + self.community_cards))
+                    winner.win_combo = max(self.get_flush(cards))
+                    winner.winning_hand = winner.win_combo
                 elif p_score == 7:
-                    winner.win_combo = max(self.get_full_house(winner.get_hand() + self.community_cards))
+                    #like two pair, return list. when comparing
+                    winner.win_combo = self.get_full_house(cards)
+                    winner.winning_hand = winner.win_combo
                 elif p_score == 8:
                     #foak
-                    winner.win_combo = max(self.get_x_of_a_kind(winner.get_hand() + self.community_cards, 4))
+                    winner.win_combo = max(self.get_x_of_a_kind(cards, 4))
+                    winner.winning_hand = winner.win_combo
                 elif p_score == 9:
-                    winner.win_combo = max(self.get_straight(winner.get_hand() + self.community_cards))
-            current_winner = winners[0]
-            # now compare highest winning combinations, getting the highest. if two people have the same highest combination, a kicker will be needed.
-            for i in range(1, len(winners)):
-                next_winner = winners[i]
-                if current_winner.win_combo < next_winner.win_combo:
-                    current_winner = next_winner
-                elif current_winner.win_combo > next_winner.win_combo:
-                    pass
-                elif current_winner.win_combo == next_winner.win_combo:
-                    if next_winner != current_winner:
-                        same_hand = True
-                        same_handed.append(winner)
-                        same_handed.append(current_winner)
-
-            if same_hand and p_score != 5 and p_score != 6:
-                #check kickers
-                draw = False
-                check_kickers = []
-                players_hands = []
-        
-                for p in same_handed:
-                    #remove the 'winning' (same) combo 
-                    check_cards = self.community_cards + p.get_hand()
-                    check_ranks = []
-
-                    for c in check_cards:
-                        check_ranks.append(c.rank)
-                    
-                    if p_score == 3:
-
-                        remove_win = [r for r in check_ranks if (r not in p.win_combo)]
-                        for r in check_ranks:
-                            if r not in p.win_combo and r not in check_kickers:
-                                check_kickers.append(r)
-                    else:
-                        remove_win = [r for r in check_ranks if r != p.win_combo]
-                        for r in check_ranks:
-                            if r != p.win_combo and r not in check_kickers:
-                                check_kickers.append(r)
-                    p.win_combo = max(remove_win)
-
-                if p_score == 1:
-                    current_winner = self.check_same_cards(same_handed, 4, check_kickers) #4 possible kickers for a high card (all cards the same)
-                elif p_score == 2:
-                    current_winner = self.check_same_cards(same_handed, 3, check_kickers) #3 possible kickers for a pair
-                elif p_score == 3:
-                    current_winner = self.check_same_cards(same_handed, 1, check_kickers) #1 possible kicker for a 2 pair
-                elif p_score == 4 or p_score == 5 or p_score == 6:
-                    current_winner = self.check_same_cards(same_handed, 2, check_kickers) #2 possible kickers for a 3oak,straight,flush
-                elif p_score == 7 or p_score == 10 or p_score == 9:
-                    #if players have same full house, they must draw (no kicker)
-                    current_winner = same_handed
-                elif p_score == 8:
-                    current_winner = self.check_same_cards(same_handed, 1, check_kickers) #1 possible kicker for a 4oak
+                    winner.win_combo = max(self.get_straight(cards))
+                    winner.winning_hand = winner.win_combo
                 else:
-                    current_winner = self.check_same_cards(same_handed, 1, check_kickers) #otherwise 1 kicker
-                if current_winner == None:
+                    raise ValueError('Invalid p_score')
+
+            largest_combo = max(winners, key=attrgetter('win_combo')).win_combo
+            for w in winners:
+                if w.win_combo == largest_combo:
+                    same_handed.append(w)
+            if len(same_handed) > 1 and kickers_to_check != 0:
+                if len(same_handed) == 0:
+                    raise ValueError('List of players with same winning hand not populated.')
+                #check kickers
+                check_kickers = []
+                highest = False
+                player_win_combo = {}
+                current_kickers = set()
+                cards_checked = set()
+                kickers_checked = 0
+                
+                if kickers_to_check == 0:
+                    raise ValueError('shouldnt be here')
+                while not highest:
+                    current_kickers = set()
+                    player_win_combo = {}
+                    for p in same_handed:
+                        #remove the 'winning' (same) combo 
+                        
+                        # only with two pair does a win combination contain two cards
+                        # In this case, they will be equal
+                        check_ranks = self.cards_to_ranks(self.community_cards + p.get_hand())
+                        check_kickers = []
+                        
+                        
+                        for r in check_ranks:
+                            if r not in cards_checked:
+                                if isinstance(p.win_combo, list):
+                                    #if the win combo is a 2 pair list
+                                    if r not in p.win_combo:
+                                        check_kickers.append(r)
+                                    else:
+                                        cards_checked.add(r)
+                                elif r != p.win_combo:
+                                    check_kickers.append(r)
+                                else:
+                                    cards_checked.add(r)
+                        
+                        if len(check_kickers) != 0:
+                            #no more kickers to check
+                            
+                            p.win_combo = max(check_kickers)
+                            player_win_combo[p] = max(check_kickers)
+                            current_kickers.add(max(check_kickers))
+                        else:
+                            draw = True
+                            p_win = same_handed
+                            return p_win, winner_score
+                    if len(current_kickers) == 0:
+                        raise ValueError('No kickers left to check, should have been caught in previous if statement.')
+                    if sum(value == max(current_kickers) for value in player_win_combo.values()) == 1:    
+                        highest = True
+                        p_win = max(player_win_combo, key=player_win_combo.get)
+                        return [p_win], winner_score
+                    next_handed = []
+                    for p in same_handed:
+                        if p.win_combo == max(current_kickers):
+                            next_handed.append(p)
+                            cards_checked.add(p.win_combo)
+                    if len(next_handed)==0:
+                        raise ValueError('No players left to check kickers from...')
+                    same_handed = next_handed
+                    
+                    kickers_checked +=1
+                    if kickers_checked == kickers_to_check:
+                        #if we've exhausted the number of possible kickers (highest five cards)
+                        return same_handed, winner_score
+                if p_win == None:
                     raise TypeError('Shits FUcked')
-                return current_winner, p_score
+                return p_win, winner_score
+                
             else:
-                if [current_winner] == None:
+                winner = same_handed
+                if winner == None:
                     raise TypeError('Shits FUcked')
-                return [current_winner], p_score
+                else:
+                    return winner, winner_score
         else:
             if [p_win] == None:
-                raise TypeError('Shits FUcked')
+                raise ValueError('P_win cannot be empty')
             return [p_win], p_score
+
+    def check_bigger_winner(self, players):
+        for p in players:
+            pass
+
+    def cards_to_ranks(self, cards):
+        return [c.rank for c in cards]
 
     def check_same_cards(self, players, number_of_kickers, cards_left):
         player_and_kicker = {}
@@ -459,14 +573,15 @@ class Tournament():
                     raise TypeError('shits fucked')
                 return [max(player_and_kicker, key=player_and_kicker.get)]
 
-    def is_royal_flush(self, cards):
+    @staticmethod
+    def is_royal_flush(cards):
         '''
         cards: seven cards composed of community and hole cards
         '''
         rf_cards = 0
         suits = [0,0,0,0]
-        if self.is_flush(cards):
-            flush = self.get_flush(cards)
+        if Game.is_flush(cards):
+            flush = Game.get_flush(cards)
         else:
             return False
         for c in flush: #loop 7 times
@@ -481,8 +596,8 @@ class Tournament():
             return True
         else:
             return False
-
-    def is_x_of_a_kind(self, cards, x):
+    @staticmethod
+    def is_x_of_a_kind(cards, x):
         count = 0
         ranks = []
         for c in cards:
@@ -491,8 +606,8 @@ class Tournament():
             if ranks.count(r) == x:
                 return True
         return False
-
-    def get_x_of_a_kind(self, cards, x):
+    @staticmethod
+    def get_x_of_a_kind(cards, x):
         count = 0
         ranks = []
         pairs = []
@@ -502,8 +617,8 @@ class Tournament():
             if ranks.count(r) == x:
                 pairs.append(r)
         return pairs
-
-    def is_straight(self, cards):
+    @staticmethod
+    def is_straight(cards):
         count = 0
         ranks = []
         straight = False
@@ -533,8 +648,8 @@ class Tournament():
                 return True
         else:
             return False
-
-    def get_straight(self, cards):
+    @staticmethod
+    def get_straight(cards):
         ranks = []
         straight = []
         count = 0
@@ -561,15 +676,15 @@ class Tournament():
                 straight.sort()
 
         return straight
-    
-    def is_flush(self, cards):
-        suits = self.count_suits(cards)
+    @staticmethod    
+    def is_flush(cards):
+        suits = Game.count_suits(cards)
         if suits[0] >= 5 or suits[1] >= 5 or suits[2] >= 5 or suits[3] >= 5:
             return True
         else:
             return False
-
-    def count_suits(self, cards):
+    @staticmethod
+    def count_suits(cards):
         suits = [0,0,0,0]
         for c in cards:
             if c.suit == Suit('h'):
@@ -581,10 +696,10 @@ class Tournament():
             else:
                 suits[3] += 1
         return suits
-
-    def get_flush(self, cards):
-        if self.is_flush(cards):
-            suits = self.count_suits(cards)
+    @staticmethod
+    def get_flush(cards):
+        if Game.is_flush(cards):
+            suits = Game.count_suits(cards)
             for i in range(5, 8):
                 if i in suits:
                     suit = suits.index(i)
@@ -601,27 +716,24 @@ class Tournament():
             return l
         else:
             raise ValueError('error: not a flush, code broken')
-
-    def conv_suits(self, cards):
+    @staticmethod
+    def conv_suits(cards):
         suits = [c.suit for c in cards]
         return suits
-
-    def conv_rankings(self, cards):
-        pass
-
-    def is_straight_flush(self, cards):
-        if self.is_flush(cards) and self.is_straight(cards):
-            flush = self.get_flush(cards)
+    @staticmethod
+    def is_straight_flush(cards):
+        if Game.is_flush(cards) and Game.is_straight(cards):
+            flush = Game.get_flush(cards)
             flush_ranks = [f.rank for f in flush]
-            straight_ranks = self.get_straight(cards)
+            straight_ranks = Game.get_straight(cards)
             if len(set(flush_ranks) & set(straight_ranks)) >= 5:
                 return True
             else:
                 return False
         else:
             return False
-
-    def is_two_pair(self, cards):
+    @staticmethod
+    def is_two_pair(cards):
         ranks = []
         pairs = 0
         seen_ranks = []
@@ -635,8 +747,8 @@ class Tournament():
             return True
         else:
             return False
-
-    def get_two_pair(self, cards):
+    @staticmethod
+    def get_two_pair(cards):
         ranks = []
         pairs = []
         seen_ranks = []
@@ -647,8 +759,8 @@ class Tournament():
                 seen_ranks.append(r)
                 pairs.append(r)
         return pairs
-
-    def is_full_house(self, cards):
+    @staticmethod
+    def is_full_house(cards):
         ranks=[]
         seen_ranks = []
         seen_two = False
@@ -663,8 +775,9 @@ class Tournament():
                 seen_three = True
                 seen_ranks.append(r)
         return seen_two and seen_three
-
-    def get_full_house(self, cards):
+    
+    @staticmethod
+    def get_full_house(cards):
         ranks=[]
         seen_ranks = []
         seen_two = False
@@ -683,34 +796,34 @@ class Tournament():
                 full_house.append(r)
         return full_house
 
-    def get_highest_combo(self, cards):
+    @staticmethod
+    def get_highest_combo(cards):
         '''
         takes seven cards and returns a number corresponding to the poker hand ranking ()
         '''
         ranking = 0
-        if self.is_royal_flush(cards):
+        if Game.is_royal_flush(cards):
             
             ranking = 10
-        elif self.is_straight_flush(cards):
+        elif Game.is_straight_flush(cards):
             ranking = 9
-        elif self.is_x_of_a_kind(cards, 4):
+        elif Game.is_x_of_a_kind(cards, 4):
             ranking = 8
-        elif self.is_full_house(cards):
+        elif Game.is_full_house(cards):
             ranking = 7
-        elif self.is_flush(cards):
+        elif Game.is_flush(cards):
             ranking = 6
-        elif self.is_straight(cards):
+        elif Game.is_straight(cards):
             ranking = 5
-        elif self.is_x_of_a_kind(cards, 3):
+        elif Game.is_x_of_a_kind(cards, 3):
             ranking = 4
-        elif self.is_two_pair(cards):
+        elif Game.is_two_pair(cards):
             ranking = 3
-        elif self.is_x_of_a_kind(cards, 2):
+        elif Game.is_x_of_a_kind(cards, 2):
             ranking = 2
         else:
             # high card
             ranking = 1
-        self.win_percents[ranking] += 1
         return ranking
 
 
@@ -724,9 +837,11 @@ class Player(object):
         self.out = False
         self.on_table = 0
         self.win_combo = None
-        self.out_of_tournament = False
+        self.winning_hand = None
+        self.out_of_Game = False
         self.all_in = False
         self.action_numbers = {'fold':1,'call':2,'check':3,'bet':4,'raise':5}
+        self.bot = False
 
     def position(self, p):
         self.position = p
@@ -746,7 +861,7 @@ class Player(object):
         return int(input('enter amount: '))
 
     def add_to_pot(self, amount):
-        if amount > self.stack:
+        if int(amount) > self.stack:
             amount = self.stack
             self.stack = 0
         else:
@@ -761,13 +876,23 @@ class Player(object):
         c1, c2 = self.hand.first, self.hand.second
         return [c1, c2]
 
+class ManualPlayer(Player):
+
+    def __init__(self, name):
+        super().__init__(name)
+        #self.action_numbers = {'fold':1,'call':2,'check':3,'bet':4,'raise':5}
+    
+    def get_action_type_and_amount(self, c,p,cc):
+        action = input('Action: ')
+        amount = input('Amount: ')
+        return self.action_numbers[action], amount
 
 class RandomPlayer(Player):
 
     def get_action_type(self, cbet, preflop):
-        action_type = random.randint(1, 5)
+        action_type = randint(1, 5)
         if cbet > 0:
-            action_type = random.randint(1, 3)
+            action_type = randint(1, 3)
             if action_type == 1:
                 return 1
             if action_type == 2:
@@ -789,17 +914,16 @@ class RandomPlayer(Player):
         else:
             return action_type
 
-
     def get_action_amount(self, action, min_bet, current_bet):
         if action == 4:
             #bet must be min bet or higher
-            amount = random.randint(min_bet, min_bet *2)
+            amount = randint(min_bet, min_bet *2)
             if amount > self.stack:
                 amount = self.stack
             return amount
         elif action == 5:
             #raise must be current bet*2 or higher
-            amount = random.randint(current_bet*2, current_bet*3)
+            amount = randint(current_bet*2, current_bet*3)
             if amount > self.stack:
                 amount = self.stack
             return amount
@@ -852,32 +976,139 @@ class RangePlayer(Player):
                 fold_chance = 5
                 call_chance = 0
                 raise_chance = 0
-        r = random.uniform(0,1)
+        r = uniform(0,1)
         action_types = ['fold'] * fold_chance + ['call'] * call_chance + ['check'] * check_chance + ['bet'] * bet_chance + ['raise'] * raise_chance
-        action = random.choice(action_types)
+        action = choice(action_types)
         return self.action_numbers[action]
 
     def get_action_amount(self, action, min_bet, current_bet):
         if action == 4:
             #bet must be min bet or higher
-            amount = random.randint(min_bet, min_bet *2)
+            amount = randint(min_bet, min_bet *2)
             if amount > self.stack:
                 amount = self.stack
             return amount
         elif action == 5:
             #raise must be current bet*2 or higher
-            amount = random.randint(current_bet*2, current_bet*3)
+            amount = randint(current_bet*2, current_bet*3)
             if amount > self.stack:
                 amount = self.stack
             return amount
         else:
             return 0
 
+class EvolvePlayer(Player):
+
+    # We define the default preflop range as all combos, sorted from worst to best. 
+    def __init__(self, name):
+        super().__init__(name)
+        self.strategy = []
+        self.bot = True
+
+    def assignStrategy(self, strategy):
+        '''
+        Takes as input a 4x3 2d Array [[a,b,c]
+                                       [d,e,f]   
+                                       [g,h,i]
+                                       [j,k,l]]
+        Where each row corresponds to 
+        a,d,g,j: matrices of bits representing the cards the player would want to stay in the hand. Corresponds to a 'top x percent' of all poker hands 
+        For a, this means top percent of all possible starting hands
+        For d,g, and j, this means the top percent of winnings hands (e.g. 1 to 10 where 1 is high card, and 10 is straight flush)
+        b,e,h,k:  integers representing the cards the player would regard as strong. Corresponds to a 'top x percent' of all poker hands
+        c,f,i,l: integers representing the amount the player would ideally like to bet, from bb*2 to the stack size
+        '''
+        ## Function needed to return top hands for each stage
+        ## PreFlop can be precalculated (e.g. AA,AK,KK,AQ,AJ...)
+
+        #Assign preflop
+        self.strategy = strategy
+        preflop_cont = self.strategy[0][0]
+        self.preflop_cont = BASE_HAND_RANGE[round(-(len(BASE_HAND_RANGE) * (preflop_cont/100))):]
+        preflop_best = self.strategy[0][1]
+        self.preflop_best = BASE_HAND_RANGE[round(-(len(BASE_HAND_RANGE) * (preflop_best/100))):]
+        self.preflop_bet = self.strategy[0][2]
+
+        # Assign flop strategy
+        self.flop_cont = self.strategy[1][0]
+        self.flop_best = self.strategy[1][1]
+        self.flop_bet = self.strategy[1][2]
+
+        # Assign turn strategy
+        self.turn_cont = self.strategy[2][0]
+        self.turn_best = self.strategy[2][1]
+        self.turn_bet = self.strategy[2][2]
+
+        # Assign river strategy
+        self.river_cont = self.strategy[3][0]
+        self.river_best = self.strategy[3][1]
+        self.river_bet = self.strategy[3][2]
+
+    def get_action_type_and_amount(self, cbet, round, community_cards):
+        if round == 0:
+            best = self.preflop_best
+            cont = self.preflop_cont
+            bet = self.preflop_bet
+        elif round == 1:
+            best = self.flop_best
+            cont = self.flop_cont
+            bet = self.flop_bet
+        elif round == 2:
+            best = self.flop_best
+            cont = self.flop_cont
+            bet = self.flop_bet
+        elif round == 3:
+            best = self.flop_best
+            cont = self.flop_cont
+            bet = self.flop_bet
+        else:
+            raise ValueError('invalid round number')
+
+        if round == 0:
+            # PREFLOP
+            if self.hand in best:
+                print(best)
+                # the hand is among what is considered best, so raise
+
+                #if the amount they want to raise to is less than or equal to double the current raise, just call
+                if bet <= cbet*2:
+                    return 2, 0
+                else:
+                    return 5, self.min_stack_bet(bet)
+            elif self.hand in cont:
+                # the hand warrants staying in, so call
+                return 2, 0
+            else:
+                # the hand is not what we consider playable, so fold
+                return 1, 0
+        else:
+            if Game.get_highest_combo(([self.hand.first,self.hand.second] + community_cards)) >= cont:
+                # Our current made hand is at least as good as what we would want to continue
+                if cbet == 0:
+                    #check
+                    return 3, 0
+                else:
+                    #call
+                    return 2,0
+            elif Game.get_highest_combo([self.hand.first,self.hand.second] + community_cards) >= best:
+                # The hand is among what we would consider the strongest, so raise/bet
+                if cbet == 0:
+                    return 4, self.min_stack_bet(bet) # bet if no current bet
+                else:
+                    if bet <= cbet*2: #if the current bet is equal to or more than we would like to bet/raise it up to then we should just call
+                        return 2, 0
+                    else:
+                        return 5, self.min_stack_bet(bet) # raise if current bet
+            else:
+                return 1,0
+        
+    def min_stack_bet(self, bet):
+        return min(bet, self.stack)
 # t = Tournament()
 
 # t.begin()
 
-# print('tournament over after %i rounds. Blinds were %i. Winner stack was %i.' % (t.hand_count, t.bb, t.get_winner()[0].stack))
+# ##print('tournament over after %i rounds. Blinds were %i. Winner stack was %i.' % (t.hand_count, t.bb, t.get_winner()[0].stack))
 # w =list(t.win_percents.values())
 # wp = [x/t.showdown_count * 100 for x in w]
-# print(wp)
+# ##print(wp)

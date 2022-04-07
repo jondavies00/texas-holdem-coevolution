@@ -1,6 +1,10 @@
-from asyncio import windows_events
-from sixhandedtournament import Tournament, Player
+from SixPlayerHoldemTournament import Tournament, Player
 import matplotlib.pyplot as plt
+import time
+import cProfile
+import multiprocessing as mp
+
+
 
 def run_tourneys(number):
     '''
@@ -12,7 +16,7 @@ def run_tourneys(number):
         t.begin()
         w = t.get_winner()
         wins[w.name] += 1
-    return wins
+    print(wins) 
 
 def get_fitness(player):
     pass
@@ -26,7 +30,7 @@ def plot_tournament_chip_history(t):
     y6 = t.get_player_history('Player 6')
     x = list(range(0, t.get_hand_count()))
     figure, ax = plt.subplots()
-    ax.plot(x, y)
+    ax.plot(x, y1)
     ax.plot(x, y2)
     ax.plot(x, y3)
     ax.plot(x, y4)
@@ -35,11 +39,24 @@ def plot_tournament_chip_history(t):
     ax.set_xlabel('Hand number')
     ax.set_ylabel('Player chip count')
     ax.legend(['Player 1', 'Player 2', 'Player 3', 'Player 4', 'Player 5', 'Player 6'])
-    plt.show()
+    plt.show(block=True)
 if __name__ == '__main__':
-    wincounts = run_tourneys(50)
-    print(wincounts)
+    # start = time.time()
+    # wincounts = run_tourneys(10)
+    # end = time.time()
+    # print('Time elapsed: %f seconds.' % (end - start))
     
-    
+    # print(wincounts)
+    t = Tournament(20, 20000)
+    t.begin()
+    plot_tournament_chip_history(t)
 
+    # cProfile.run('t.begin()')
+    # start = time.time()
+    # pool = mp.Pool(mp.cpu_count())
+    # print(mp.cpu_count())
+    # result = pool.map(run_tourneys, [20,20,20,20,20,20,20,20,20,20,20,20])
+
+    # end = time.time()
+    # print('Time elapsed: %f seconds.' % (end - start))
 
