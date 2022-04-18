@@ -164,7 +164,7 @@ def playPopulation(individuals, max_hands):
         #print("notfinished")
         playing = []
         oppIndexes = []
-        game = spp.Game('evolve', small_blind=10, max_hands=max_hands)
+        game = spp.Game('evolve', small_blind=2, max_hands=max_hands)
         for i in range(6):
             if len(indivs_refer[i]) == 0:
                 # pick from whole population instead
@@ -187,7 +187,7 @@ def playPopulation(individuals, max_hands):
 
 
 def evaluateHOFs(six_indivs, max_hands):
-    game = spp.Game('evolve', small_blind=10, max_hands=max_hands)
+    game = spp.Game('evolve', small_blind=2, max_hands=max_hands)
     ''' Take 6 individuals and play a game with them, returning the last player's (one we care about) fitness'''
     for i in range(6):
         to_play = six_indivs[i]
@@ -198,26 +198,10 @@ def evaluateHOFs(six_indivs, max_hands):
     fits = game.get_player_chip_count(0)
     f = fits
     return f,
-    sorted_chips = list(pc.values())
-    sorted_chips.sort()
-    if chips == 0:
-        fitness = (0,)
-    elif chips == sorted_chips[5]:
-        fitness = (6,)
-    elif chips == sorted_chips[4]:
-        fitness = (5,)
-    elif chips == sorted_chips[3]:
-        fitness = (4,)
-    elif chips == sorted_chips[2]:
-        fitness = (3,)
-    elif chips == sorted_chips[1]:
-        fitness = (2,)
-    else:
-        fitness = (1,)
-    return fitness
+
 
 def evaluateRandoms(six_indivs,max_hands ):
-    game = spp.Game('evolve', small_blind=10, max_hands=max_hands)
+    game = spp.Game('evolve', small_blind=2, max_hands=max_hands)
     ''' Take 6 individuals and play a game with them, returning the last player's (one we care about) fitness'''
     for i in range(6):
         to_play = six_indivs[i]
@@ -231,7 +215,7 @@ def evaluateHardcoded(indiv,max_hands):
     '''
     Take one individual and return how they do after 1000 played hands
     '''
-    game = spp.Game('evaluate-hardcoded', small_blind=10, max_hands=max_hands)
+    game = spp.Game('evaluate-hardcoded', small_blind=2, max_hands=max_hands)
     game.assign_network_weights(indiv[:PREFLOP_SIZE], indiv[PREFLOP_SIZE:], 0)
     game.begin()
     fits = game.get_player_chip_count(0)
@@ -288,8 +272,8 @@ toolbox.register("population", initPopulation, list, toolbox.individual, size=1,
 #print(IND_SIZE)
 
 max_hands = 200 # Maximum amount of hands to play for evaluation
-evals = 100
-total_players = 36 # Must be a multiple of 6
+evals = 10
+total_players = 60 # Must be a multiple of 6
 players_per_pop = total_players // 6
 
 PARETO_MATRIX = np.zeros((total_players, total_players))
@@ -333,8 +317,8 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
         invalid_ind.append([ind for ind in p if not ind.fitness.valid])
 
     for i in range(evals):
+        #print(i)
         playPopulation(invalid_ind, max_hands)
-        print(i)
 
     dominances = []
     for n,p in enumerate(invalid_ind):
@@ -371,6 +355,7 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
             invalid_ind.append([ind for ind in p if not ind.fitness.valid])
         
         for i in range(evals):
+            #print(i)
             playPopulation(invalid_ind, max_hands)
 
         dominances = []
@@ -385,30 +370,34 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
         #Play hardcoded strategies with best individual from each population
         for i in range(6):
             rf = 0
-            for e in range(5):
+            for e in range(evals):
                 rf += evaluateHardcoded(tools.selBest(offspring[i], 1)[0], max_hands)[0]
-            objective_fitness[i].append(rf/5)
-        print(np.mean(objective_fitness) - 20000)
+            objective_fitness[i].append(rf/evals)
+        print(objective_fitness[0] - 1000)
+        #print(objective_fitness)
         objective_fitness = [[],[],[],[],[],[]]
 
         #Play the hall of fame individuals with the best individual from each population (to measure perforamnce)
-        if gen > 5:
-            for i in range(6):
-                opponents = [o for o in range(6) if o != i]
-                rf = 0
-                for e in range(5):
-                    rf += evaluateHOFs([tools.selBest(offspring[i], 1)[0], hof[opponents[0]], hof[opponents[1]], hof[opponents[2]], hof[opponents[3]], hof[opponents[4]]], max_hands)[0]
-                objective_fitness[i].append(rf/5)
-            print(np.mean(objective_fitness) - 20000)
-        objective_fitness = [[],[],[],[],[],[]]
+        # if gen > 5:
+        #     for i in range(6):
+        #         opponents = [o for o in range(6) if o != i]
+        #         rf = 0
+        #         for e in range(5):
+        #             rf += evaluateHOFs([tools.selBest(offspring[i], 1)[0], hof[opponents[0]], hof[opponents[1]], hof[opponents[2]], hof[opponents[3]], hof[opponents[4]]], max_hands)[0]
+        #         objective_fitness[i].append(rf/5)
+        #     print(np.mean(objective_fitness) - 1000)
+        #     print(objective_fitness)
+        # objective_fitness = [[],[],[],[],[],[]]
 
         #Play random individuals against the best from each population to measure performance.
         for i in range(6):
             rf = 0
-            for e in range(5):
-                rf += evaluateRandoms([toolbox.individual(), toolbox.individual(),toolbox.individual(),toolbox.individual(),toolbox.individual(),tools.selBest(offspring[i], 1)[0]], max_hands)[0]
-            objective_fitness[i].append(rf/5)
-        print(np.mean(objective_fitness) - 20000)
+            for e in range(evals):
+                rf += evaluateRandoms([tools.selBest(offspring[i], 1)[0], toolbox.individual(), toolbox.individual(),toolbox.individual(),toolbox.individual(),toolbox.individual()], max_hands)[0]
+            objective_fitness[i].append(rf/evals)
+        print(objective_fitness[0] - 1000)
+        #print(objective_fitness)
+        objective_fitness = [[],[],[],[],[],[]]
 
         # Update the hall of fame with the generated individuals
         if halloffame is not None and gen >= 5:
@@ -427,7 +416,7 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
     return population, objective_fitness
 
 CXPB = 0.5
-MUTPB = 0.2
+MUTPB = 0.3
 NGEN = 1000
 hof = tools.HallOfFame(6)
 
