@@ -1,27 +1,19 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from pickle import TRUE
 import random
 import math
-from datetime import datetime
-from re import L
-from joblib import Parallel
 import numpy as np
-import poker
+
 import sys
 import sys
-import matplotlib.pyplot as plt
+
 from pathos.multiprocessing import ProcessingPool as Pool
 import multiprocessing as mp
-import time
 # insert at 1, 0 is the script path (or '' in REPL)
 sys.path.insert(1, r'C:\Users\jonat\OneDrive\Documents\Computer Science Degree\Year 3\Project\Implementation\poker')
 import ParetoSixPlayerPoker as spp
-import cProfile
-import pstats
 import copy
-
 
 from deap import base
 from deap import creator
@@ -41,7 +33,7 @@ numHiddenNodes2 = 5
 numOutputNodes2 = 3
 
 PREFLOP_SIZE = (((numInputNodes1+1) * numHiddenNodes1) + (numHiddenNodes1 * numOutputNodes1))
-#print(PREFLOP_SIZE)
+
 POSTFLOP_SIZE = (((numInputNodes2+1) * numHiddenNodes2) + (numHiddenNodes2 * numOutputNodes2))
 
 IND_SIZE = PREFLOP_SIZE + POSTFLOP_SIZE
@@ -54,7 +46,6 @@ def assignToMatrix(six_indivs, indiv_matrix):
             target = six_indivs[i]
             if i != row_number:
                 PARETO_MATRIX[player.id-1][target.id-1] = indiv_matrix[row_number][i]
-    #print(PARETO_MATRIX)
     
 def paretoDominates(player, target):
     '''Returns true if the player pareto dominates the target'''
@@ -128,7 +119,9 @@ def evaluatePopulation(individuals):
         finished = all([len(p)==0 for p in indivs_refer]) #if all indivs are empty
     return fitnesses
 
-def playPopulation(individuals, max_hands):
+max_hands = 200 # Maximum amount of hands to play for evaluation
+
+def playPopulation(individuals, max_hands=max_hands):
     '''
     Takes six whole populations of individuals, plays a game of six random players from each population and returns a list 
     of tuples (indivs and matrix)
@@ -168,7 +161,7 @@ def playPopulation(individuals, max_hands):
         finished = all([len(p)==0 for p in indivs_refer])
     #print(PARETO_MATRIX)
     return indivs_and_matrix
-    # All the players should be assigned to the matrix, now define fitnesses as number of people they pareto dominate
+
 def applyDeterministicCrowding(parents, offspring):
     new_pop = []
     #get pairs of most similar 
@@ -258,7 +251,8 @@ def divFitnessList(f1, d):
 def evaluatePlayer(indiv):
     '''Simply return the row of the player in the caclulated pareto matrix as a tuple'''
     return tuple(PARETO_MATRIX[indiv.id])
-total_players = 60 # Must be a multiple of 6
+
+total_players = 300 # Must be a multiple of 6
 creator.create("FitnessMax", base.Fitness, weights=(1.0,)*total_players)
 creator.create("Individual", list, fitness=creator.FitnessMax, id=None)
 
@@ -268,13 +262,12 @@ def initIndividual(weights, id):
     return ind
 
 toolbox = base.Toolbox()
-#toolbox.register("attr_float", random.uniform, -1.0, 1.0)
 
 toolbox.register("individual", initIndividual, creator.Individual,
                 id=None)
 toolbox.register("evaluate", evaluatePlayer)
 
-
+evolvedIndiv = pickle.load(open("Gathering Results/saves/Adapted Hardcoded Strategy/p1.p", 'rb'))
 
 toolbox.register("select", tools.selNSGA2)
 
@@ -286,12 +279,12 @@ def initPopulation(inds, ind_init, size, ids):
     return inds(ind_init(id = ids*players_per_pop + i) for i in range(size))
 
 toolbox.register("population", initPopulation, list, toolbox.individual, size=1, ids=None)
-#print(IND_SIZE)
 
-max_hands = 200 # Maximum amount of hands to play for evaluation
+to_add = total_players // 2
+
 evals = 10
 
-players_per_pop = total_players // 6
+players_per_pop = (total_players // 2) // 6
 
 PARETO_MATRIX = np.zeros((total_players, total_players))
 
@@ -304,6 +297,9 @@ pop5 = toolbox.population(size=players_per_pop, ids=4)
 pop6 = toolbox.population(size=players_per_pop, ids=5)
 populations = [pop1,pop2,pop3,pop4,pop5,pop6]
 
+for p in populations:
+    for i in range(to_add // 6):
+        p.append(evolvedIndiv)
 
 logbook = tools.Logbook()
 stats = tools.Statistics(key=lambda ind: ind.fitness.values)
@@ -328,35 +324,38 @@ def eaMuPlusLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen, stats=No
 
     results = []
     async_results = []
-    
+
     while len(results) < total_players: # play as many games in the population as there are players, so that everyone has a chance to play everyone else
         with mp.Pool(mp.cpu_count()) as pool:
             async_results.append(pool.apply_async(playPopulation, (invalid_ind,max_hands)))
             pool.close()
             pool.join()
         results += async_results[0].get()
-        print(len(results))
 
     for t in results:
-        #print(t)
         assignToMatrix(t[0],t[1])
 
     fitnesses = []
     for i in invalid_ind:
         fitnesses.append(toolbox.map(toolbox.evaluate, i))
 
-    count=0
-    for ind, fit in zip(invalid_ind[count], fitnesses[count]):
-        ind.fitness.values = fit
-        count+=1
+    for i in range(6):
+        for ind, fit in zip(invalid_ind[i], fitnesses[i]):
+            ind.fitness.values = fit
 
     # Begin the generational process
     for gen in range(1, ngen + 1):
         print("GEN: %i" % gen)
         fitnesses = []
-
+        
 
         offspring = [algorithms.varOr(p, toolbox,lambda_, cxpb, mutpb) for p in population]
+
+        # Put some random members of the hof into the offspring
+        if len(hof) != 0:
+            for i in range(SELECT_FROM_HOF * 6):
+                offspring[random.randint(0, 5)].append(tools.selRandom(hof, 1)[0])
+
         # Evaluate the individuals with an invalid fitness
         invalid_ind = []
         for p in offspring:
@@ -373,35 +372,38 @@ def eaMuPlusLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen, stats=No
             print(len(results))
 
         for t in results:
-            #print(t)
             assignToMatrix(t[0],t[1])
 
         for i in invalid_ind:
             fitnesses.append(toolbox.map(toolbox.evaluate, i))
 
-        count=0
-        for ind, fit in zip(invalid_ind[count], fitnesses[count]):
-            ind.fitness.values = fit
-            count+=1
+        for i in range(6):
+            for ind, fit in zip(invalid_ind[i], fitnesses[i]):
+                ind.fitness.values = fit
         
         for i,o in enumerate(offspring):
-            offspring[i] = applyDeterministicCrowding(population[0], o) 
+            offspring[i] = applyDeterministicCrowding(population[i], o) 
+            
         # Replace the current population by the offspring
         for i in range(6):
             population[i][:] = toolbox.select(population[i] + offspring[i], mu)
         
         for i,p in enumerate(population):
-            pickle.dump(p, open("Gathering Results/saves/Six-Population Pareto Coevolution NGSA/population%i_gen%i.p" % (i, gen), 'wb'))
+            pickle.dump(p, open("Gathering Results/saves/Six-Population Pareto Coevolution HOF and DC/Attempt 5 (120 per pop half seeded)/population%i_gen%i.p" % (i, gen), 'wb'))
 
-
+        for p in population:
+            hof.update(p)
 
 CXPB = 0.5
 MUTPB = 0.2
 NGEN = 100
-MU = 60
-LAMBDA = 120
-hof = tools.HallOfFame(6)
+MU = 300
+LAMBDA = 600
 
+
+# The hall of fame will be limited to
+hof = tools.ParetoFront()
+SELECT_FROM_HOF = 20
 if __name__ == "__main__":
     #pool = multiprocessing.Pool(processes=5)
     #toolbox.register("map", pool.map)

@@ -1,25 +1,16 @@
 #!/usr/bin/env python
 # coding: utf-8
-
 import random
-import math
-from datetime import datetime
-from re import L
 import numpy as np
-import poker
 import sys
 import sys
-import matplotlib.pyplot as plt
 from pathos.multiprocessing import ProcessingPool as Pool
 import multiprocessing
-import time
 # insert at 1, 0 is the script path (or '' in REPL)
 sys.path.insert(1, r'C:\Users\jonat\OneDrive\Documents\Computer Science Degree\Year 3\Project\Implementation\poker')
 import SixPlayerPoker as spp
 import cProfile
-import pstats
-import copy
-
+import pickle
 
 from deap import base
 from deap import creator
@@ -58,7 +49,7 @@ def evaluatePopulation(individuals):
     while not finished:
         #print("notfinished")
         oppIndexes = []
-        game = spp.Game('evolve', small_blind=10, max_hands=1000)
+        game = spp.Game('evolve', small_blind=10, max_hands=200)
         for i in range(6):
             if len(indivs_refer[i]) == 0:
                 # pick from whole population instead
@@ -182,8 +173,11 @@ def initPopulation(inds, ind_init, size, ids):
 toolbox.register("population", initPopulation, list, toolbox.individual, size=1, ids=None)
 #print(IND_SIZE)
 
-total_players = 120 # Must be a multiple of 6
-players_per_pop = total_players // 6
+total_players = 600 # Must be a multiple of 6
+
+players_per_pop = 588 // 6
+
+
 
 #Create 6 populations of 20 players with relevant ids
 pop1 = toolbox.population(size=players_per_pop, ids=1)
@@ -193,7 +187,13 @@ pop4 = toolbox.population(size=players_per_pop, ids=4)
 pop5 = toolbox.population(size=players_per_pop, ids=5)
 pop6 = toolbox.population(size=players_per_pop, ids=6)
 populations = [pop1,pop2,pop3,pop4,pop5,pop6]
-
+evolvedIndiv = pickle.load(open("Gathering Results/saves/Adapted Hardcoded Strategy/p1.p", 'rb'))
+for p in range(6):
+    for i in range(2):
+        to_append = copy.deepcopy(evolvedIndiv)
+        to_append.id = p + 1
+        # evolvedIndiv.id = p
+        populations[p].append(to_append)
 
 logbook1 = tools.Logbook()
 logbook2 = tools.Logbook()
@@ -228,25 +228,17 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, pool, stats=None,
     # for i in range(4):
     #     addFitnessLists(fitnesses, toolbox.evaluate(invalid_ind))
     async_results = []
-    with multiprocessing.Pool(processes=5) as poo:
-        for i in range(5):
-            async_results.append(poo.apply_async(toolbox.evaluate, (invalid_ind,)))
-        poo.close()
-        poo.join()
-
+    res = []
+    #results = []
     results =  [[(0,)]*20,[(0,)]*20,[(0,)]*20,[(0,)]*20,[(0,)]*20,[(0,)]*20]
-    
-    for i, async_result in enumerate(async_results):
-        results = addFitnessLists(results,async_result.get())
+    for i in range(evals):
+        results = addFitnessLists(results, toolbox.evaluate(population))
 
-    fitnesses = divFitnessList(results, 5) # generates an average fitness over 5 games
+    fitnesses = divFitnessList(results, evals) # generates an average fitness over 5 games
     for i in range(len(invalid_ind)):
         for ind, fit in zip(invalid_ind[i], fitnesses[i]):
             ind.fitness.values = fit
 
-    if halloffame is not None:
-        for p in population:
-            halloffame.insert(tools.selBest(p, 1)[0])
     # for i,p in enumerate(populations):
     #     record = stats.compile(p) if stats else {}
     #     logbooks[i].record(gen=0, nevals=len(invalid_ind), **record)
@@ -270,16 +262,21 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, pool, stats=None,
             invalid_ind.append([ind for ind in p if not ind.fitness.valid])
         
         async_results = []
-        with multiprocessing.Pool(processes=5) as poo:
-            for i in range(5):
-                async_results.append(poo.apply_async(toolbox.evaluate, (invalid_ind,)))
-            poo.close()
-            poo.join()
+        #results = []
+        # results =  [[(0,)]*20,[(0,)]*20,[(0,)]*20,[(0,)]*20,[(0,)]*20,[(0,)]*20]
+        # for i in range(evals):
+        #     with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+        #         async_results.append(pool.apply_async(toolbox.evaluate, (invalid_ind,)))
+        #     pool.close()
+        #     pool.join()
+        # for i, async_result in enumerate(async_results[0].get()):
+        #     results = addFitnessLists(results,async_result)
         results =  [[(0,)]*20,[(0,)]*20,[(0,)]*20,[(0,)]*20,[(0,)]*20,[(0,)]*20]
-        for i, async_result in enumerate(async_results):
-            results = addFitnessLists(results,async_result.get())
+        for i in range(evals):
+            results = addFitnessLists(results, toolbox.evaluate(population))
 
-        fitnesses = divFitnessList(results, 5) # generates an average fitness over 5 games
+        fitnesses = divFitnessList(results, evals) # generates an average fitness over 5 games
+        #fitnesses = divFitnessList(results, 5) # generates an average fitness over 5 games
 
         for i in range(len(invalid_ind)):
             for ind, fit in zip(invalid_ind[i], fitnesses[i]):
@@ -297,12 +294,7 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, pool, stats=None,
         #     objective_fitness[i].append(rf/5)
         # print(np.mean(objective_fitness))
 
-        for i in range(6):
-            rf = 0
-            for e in range(5):
-                rf += evaluateHardcoded(tools.selBest(offspring[i], 1)[0])[0]
-            objective_fitness[i].append(rf/5)
-        print(np.mean(objective_fitness))
+
         # Update the hall of fame with the generated individuals
         # if halloffame is not None:
         #     for p in offspring:
@@ -311,17 +303,20 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, pool, stats=None,
         # Replace the current population by the offspring
         population[:] = offspring
 
+        for i,p in enumerate(population):
+            pickle.dump(p, open("Gathering Results/saves/Six-Population Reg Coevolution/population%i_gen%i.p" % (i, gen), 'wb'))
         # Append the current generation statistics to the logbook
         # record = stats.compile(population) if stats else {}
         #logbook.record(gen=gen, nevals=len(invalid_ind), **record)
         #if verbose:
             #print (logbook.stream)
 
-    return population, objective_fitness
+    return population
 
 CXPB = 0.5
 MUTPB = 0.2
-NGEN = 1000
+NGEN = 100
+evals = 10
 hof = tools.HallOfFame(6)
 
 if __name__ == "__main__":
@@ -330,45 +325,4 @@ if __name__ == "__main__":
 
     
 
-    pop, log = eaSimple(populations, toolbox, CXPB, MUTPB, NGEN,pool, stats, hof)
-
-    print(log)
-
-
-    indiv1 = tools.selBest(pop[0], 1)[0]
-    indiv2 = tools.selBest(pop[1], 2)[0]
-    indiv3 = tools.selBest(pop[2], 3)[0]
-    indiv4 = tools.selBest(pop[3], 4)[0]
-    indiv5 = tools.selBest(pop[4], 5)[0]
-    indiv6 = tools.selBest(pop[5], 6)[0]
-
-    import pickle as pickle
-    pickle.dump(indiv1, open( "p1.p", "wb" ) )
-    pickle.dump(indiv2, open( "p2.p", "wb" ) )
-    pickle.dump(indiv3, open( "p3.p", "wb" ) )
-    pickle.dump(indiv4, open( "p4.p", "wb" ) )
-    pickle.dump(indiv5, open( "p5.p", "wb" ) )
-    pickle.dump(indiv6, open( "p6.p", "wb" ) )
-
-    pickle.dump(log, open("obj_f", "wb"))
-
-    p1_f = log[0]
-    p2_f = log[1]
-    p3_f = log[2]
-    p4_f = log[3]
-    p5_f = log[4]
-    p6_f = log[5]
-    import matplotlib.pyplot as plt
-
-    plt.xlabel('Gen')
-    plt.ylabel('Fitness')
-    plt.plot(np.arange(NGEN),p1_f, label='FitnessP1 vs random strategy')
-    plt.plot(np.arange(NGEN),p2_f, label='FitnessP2 vs random strategy')
-    plt.plot(np.arange(NGEN),p3_f, label='FitnessP3 vs random strategy')
-    plt.plot(np.arange(NGEN),p4_f, label='FitnessP4 vs random strategy')
-    plt.plot(np.arange(NGEN),p5_f, label='FitnessP5 vs random strategy')
-    plt.plot(np.arange(NGEN),p6_f, label='FitnessP6 vs random strategy')
-    plt.legend(loc='upper right')
-    plt.show()
-
-
+    pop = eaSimple(populations, toolbox, CXPB, MUTPB, NGEN,pool, stats, hof)

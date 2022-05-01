@@ -1,25 +1,16 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from pickle import TRUE
 import random
-import math
-from datetime import datetime
 from re import L
-from joblib import Parallel
 import numpy as np
-import poker
 import sys
 import sys
-import matplotlib.pyplot as plt
 from pathos.multiprocessing import ProcessingPool as Pool
 import multiprocessing as mp
-import time
 # insert at 1, 0 is the script path (or '' in REPL)
 sys.path.insert(1, r'C:\Users\jonat\OneDrive\Documents\Computer Science Degree\Year 3\Project\Implementation\poker')
 import ParetoSixPlayerPoker as spp
-import cProfile
-import pstats
 import copy
 import pickle
 
@@ -125,7 +116,9 @@ def evaluatePopulation(individuals):
         finished = all([len(p)==0 for p in indivs_refer]) #if all indivs are empty
     return fitnesses
 
-def playPopulation(individuals, max_hands):
+max_hands = 200 # Maximum amount of hands to play for evaluation
+
+def playPopulation(individuals, max_hands=max_hands):
     '''
     Takes one whole populations of individuals, plays a game of six random players and returns a list 
     of tuples (indivs and matrix)
@@ -217,9 +210,8 @@ def evaluatePlayer(indiv):
     '''Simply return the row of the player in the caclulated pareto matrix as a tuple'''
     return tuple(PARETO_MATRIX[indiv.id])
 
-max_hands = 200 # Maximum amount of hands to play for evaluation
-evals = 5
-total_players = 110 # Must be a multiple of 6
+evals = 10
+total_players = 120
 creator.create("FitnessMax", base.Fitness, weights=(1.0,)*total_players)
 creator.create("Individual", list, fitness=creator.FitnessMax, id=None)
 
@@ -229,13 +221,10 @@ def initIndividual(weights, id):
     return ind
 
 toolbox = base.Toolbox()
-#toolbox.register("attr_float", random.uniform, -1.0, 1.0)
 
 toolbox.register("individual", initIndividual, creator.Individual,
                 id=None)
 toolbox.register("evaluate", evaluatePlayer)
-
-
 
 toolbox.register("select", tools.selNSGA2)
 
@@ -247,18 +236,15 @@ def initPopulation(inds, ind_init, size, ids):
     return inds(ind_init(id = i) for i in range(size))
 
 toolbox.register("population", initPopulation, list, toolbox.individual, size=1, ids=None)
-#print(IND_SIZE)
-
 
 PARETO_MATRIX = np.zeros((total_players, total_players))
 
-
 pop = toolbox.population(size=total_players, ids=0)
 
-evolvedIndiv = pickle.load(open("saves/Adapted Hardcoded Strategy/p1.p", 'rb'))
+# evolvedIndiv = pickle.load(open("Gathering Results/saves/Adapted Hardcoded Strategy/p1.p", 'rb'))
 
-for i in range(10):
-    pop.append(evolvedIndiv)
+# for i in range(10):
+#     pop.append(evolvedIndiv)
 
 logbook = tools.Logbook()
 stats = tools.Statistics(key=lambda ind: ind.fitness.values)
@@ -277,56 +263,32 @@ def eaMuPlusLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen, stats=No
 
     invalid_ind=[ind for ind in population if not ind.fitness.valid]
 
-    results = playPopulation(invalid_ind, max_hands)
-    for r in results:
-        assignToMatrix(r[0], r[1])
+    number_to_evaluate =  [invalid_ind] * evals
+    with mp.Pool(processes=mp.cpu_count()) as pool:
+        results = pool.map(playPopulation, number_to_evaluate)
+    for t in results[0]:
+        assignToMatrix(t[0], t[1])
 
-    # dominances = []
-    # for p in invalid_ind:
-    #     dominances.append(checkParetoDominanceOnePop(p, invalid_ind))
     fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
 
     for ind, fit in zip(invalid_ind, fitnesses):
         ind.fitness.values = fit
-
-
 
     # Begin the generational process
     for gen in range(1, ngen + 1):
         print("GEN: %i" % gen)
 
         offspring = algorithms.varOr(population, toolbox,lambda_, cxpb, mutpb)
-        # Select the next generation individuals
-        
-
-        # Vary the pool of individuals
-        
 
         # Evaluate the individuals with an invalid fitness
         invalid_ind=[ind for ind in offspring if not ind.fitness.valid]
-    
-        # results = playPopulation(invalid_ind, max_hands)
-        # for r in results:
-        #     assignToMatrix(r[0], r[1])
-        t1 = time.time()
-        results = []
-        async_results = []
-        for i in range(evals):
-            with mp.Pool(mp.cpu_count()) as pool:
-                async_results.append(pool.apply_async(playPopulation, (invalid_ind,max_hands)))
-                pool.close()
-                pool.join()
-                #print(len(async_results[0].get()))
-            results += async_results[0].get()
-            print(len(results))
-        t2 = time.time()
-        print("time for threaded: ", t2-t1)
 
-        for t in results:
-            #print(t)
-            assignToMatrix(t[0],t[1])
+        number_to_evaluate =  [invalid_ind] * evals
+        with mp.Pool(processes=mp.cpu_count()) as pool:
+            results = pool.map(playPopulation, number_to_evaluate)
+        for t in results[0]:
+            assignToMatrix(t[0], t[1])
 
-            
         fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
 
         for ind, fit in zip(invalid_ind, fitnesses):
@@ -334,19 +296,8 @@ def eaMuPlusLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen, stats=No
 
         population[:] = toolbox.select(population + offspring, mu)
 
-
-
-        # Append the current generation statistics to the logbook
-        # record = stats.compile(population) if stats else {}
-        # logbook.record(gen=gen, nevals=len(invalid_ind), **record)
-        # if verbose:
-        #     print (logbook.stream)
-
-        # We only need the population each generation. For CIAO plots, we will play new games to generate the fitness
-        # For obj fitness, we will use the indivs to generate avg fitness too
-
         # This is ONLY for recording how individuals change
-        pickle.dump(population, open("saves/One-Population Coevolution with NGSA and Mu+Lambda/population_gen%i.p" % gen, 'wb'))
+        pickle.dump(population, open("Gathering Results/saves/One-Population Coevolution with NGSA and Mu+Lambda/Attempt 2 (not seeded)/population_gen%i.p" % gen, 'wb'))
         # pickle.dump(logbook, "saves/One-Population Coevolution with NGSA and Mu+Lambda/logbook_gen%i" % gen)
 
     return population, logbook
@@ -359,8 +310,6 @@ LAMBDA = 240
 hof = tools.HallOfFame(6)
 
 if __name__ == "__main__":
-    #pool = multiprocessing.Pool(processes=5)
-    #toolbox.register("map", pool.map)
     pop, log = eaMuPlusLambda(pop, toolbox, MU, LAMBDA, CXPB, MUTPB, NGEN, stats, hof)
 
 

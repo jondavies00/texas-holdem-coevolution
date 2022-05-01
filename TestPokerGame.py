@@ -1,7 +1,7 @@
-import SixPlayerPoker as spp
 import ParetoSixPlayerPoker as pspp
 import time
 
+### Poker test file for generating data to prove that my 'tag' players beat the 'random' ones
 
 g = pspp.Game('testrandvstag', 4, 100)
 t1 = time.time()

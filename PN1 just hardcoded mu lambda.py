@@ -40,7 +40,7 @@ numHiddenNodes2 = 5
 numOutputNodes2 = 3
 
 PREFLOP_SIZE = (((numInputNodes1+1) * numHiddenNodes1) + (numHiddenNodes1 * numOutputNodes1))
-#print(PREFLOP_SIZE)
+
 POSTFLOP_SIZE = (((numInputNodes2+1) * numHiddenNodes2) + (numHiddenNodes2 * numOutputNodes2))
 
 IND_SIZE = PREFLOP_SIZE + POSTFLOP_SIZE
@@ -57,33 +57,7 @@ def evaluatePlayer(indiv):
         game.begin()
         fits = game.get_player_chip_count(0)
         f += fits
-    #print(f/evals)
     return (f/evals)-1000,
-
-def evaluateHOFs(six_indivs, max_hands):
-    game = spp.Game('evolve', small_blind=2, max_hands=max_hands)
-    ''' Take 6 individuals and play a game with them, returning the last player's (one we care about) fitness'''
-    for i in range(6):
-        to_play = six_indivs[i]
-        game.assign_network_weights(to_play[:PREFLOP_SIZE], to_play[PREFLOP_SIZE:], i)
-    game.begin()
-    # pc = game.get_all_player_chips()
-    # chips = pc[i]
-    fits = game.get_player_chip_count(0)
-    f = fits
-    return f,
-
-
-def evaluateRandoms(six_indivs,max_hands ):
-    game = spp.Game('evolve', small_blind=2, max_hands=max_hands)
-    ''' Take 6 individuals and play a game with them, returning the last player's (one we care about) fitness'''
-    for i in range(6):
-        to_play = six_indivs[i]
-        game.assign_network_weights(to_play[:PREFLOP_SIZE], to_play[PREFLOP_SIZE:], i)
-    game.begin()
-    fits = game.get_player_chip_count(0)
-    f = fits
-    return f,
 
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", list, fitness=creator.FitnessMax, id=None)
@@ -94,13 +68,10 @@ def initIndividual(weights, id):
     return ind
 
 toolbox = base.Toolbox()
-#toolbox.register("attr_float", random.uniform, -1.0, 1.0)
 
 toolbox.register("individual", initIndividual, creator.Individual,
                 id=None)
 toolbox.register("evaluate", evaluatePlayer)
-
-
 
 toolbox.register("select", tools.selTournament, tournsize=5)
 
@@ -112,7 +83,6 @@ def initPopulation(inds, ind_init, size, ids):
     return inds(ind_init(id = i) for i in range(size))
 
 toolbox.register("population", initPopulation, list, toolbox.individual, size=1, ids=None)
-#print(IND_SIZE)
 
 max_hands = 200 # Maximum amount of hands to play for evaluation
 evals = 5
@@ -120,9 +90,7 @@ total_players = 120 # Must be a multiple of 6
 
 PARETO_MATRIX = np.zeros((total_players, total_players))
 
-
 pop = toolbox.population(size=total_players, ids=0)
-
 
 logbook = tools.Logbook()
 stats = tools.Statistics(key=lambda ind: ind.fitness.values)
@@ -130,7 +98,6 @@ stats.register("avg", np.mean)
 stats.register("std", np.std)
 stats.register("min", np.min)
 stats.register("max", np.max)
-
 
 def eaMuPlusLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen, stats=None,
              halloffame=None, verbose=__debug__):
@@ -188,6 +155,7 @@ MUTPB = 0.2
 NGEN = 100
 MU = 120
 LAMBDA = 240
+
 if __name__ == "__main__":
     pool = mp.Pool()
     toolbox.register("map", pool.map)

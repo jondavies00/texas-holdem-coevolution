@@ -40,6 +40,10 @@ class Game():
             p6.manual = True
         elif test == 'evaluate-hardcoded':
             p1, p2, p3, p4, p5, p6 = NeuralPlayer('Player 1'), TAGPlayer('Player 2'), LAGPlayer('Player 3'), LPPlayer('Player 4'), TPPlayer('Player 5'), choice([TAGPlayer('Player 6'), LAGPlayer('Player 6'), LPPlayer('Player 6'), TPPlayer('Player 6')])
+        elif test == 'evaluate-lag':
+            p1, p2, p3, p4, p5, p6 = NeuralPlayer('Player 1'), LAGPlayer('Player 2'), LAGPlayer('Player 3'), LAGPlayer('Player 3'), LAGPlayer('Player 4'), LAGPlayer('Player 5')
+        elif test == 'evaluate-tag':
+            p1, p2, p3, p4, p5, p6 = NeuralPlayer('Player 1'), TAGPlayer('Player 2'), TAGPlayer('Player 3'), TAGPlayer('Player 3'), TAGPlayer('Player 4'), TAGPlayer('Player 5')
         elif test == 'testrandvstag':
             p1, p2, p3, p4, p5, p6 = TAGPlayer('Player 1'), RandomPlayer('Player 2'), RandomPlayer('Player 3'), RandomPlayer('Player 4'), RandomPlayer('Player 5'), RandomPlayer('Player 6')
         elif test == 'evolve+hardcoded':
@@ -238,10 +242,12 @@ class Game():
         #print(len(self.players), action_left)
         all_in = 0
         to_return = 0
+        count = 0
         while action_left > 0:
             player_to_act = next(players)
         
             if not player_to_act.out and player_to_act.stack > 0:
+                count+=1
                 if self.pprint: print('%s to act...' % player_to_act.position)
                 # action_type, amount = player_to_act.get_action_type_and_amount(current_bet, p_round, self.community_cards)
                 if self.random: 
@@ -338,6 +344,8 @@ class Game():
             if players_left - all_in == 1:
                 #if everyone has gone all in to call bar 1 person who has enough to chips to cover, the amount they have on the table should be returned6
                 better.add_to_stack(to_return)
+            if count == 10000:
+                break
             #print(self.pot)
         if self.pprint: print('Round over, %s players left, %i in the pot' % (str(len(self.players) - out), self.pot))
 

@@ -188,7 +188,7 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
 
 CXPB = 0.5
 MUTPB = 0.2
-NGEN = 1000
+NGEN = 100
 hof = tools.HallOfFame(6)
 
 if __name__ == "__main__":
