@@ -504,13 +504,13 @@ class Game():
                         #if we've exhausted the number of possible kickers (highest five cards)
                         return same_handed, best_score
                 if p_win == None:
-                    raise TypeError('Shits FUcked')
+                    raise TypeError('')
                 return p_win, best_score
                 
             else:
                 winner = same_handed
                 if winner == None:
-                    raise TypeError('Shits FUcked')
+                    raise TypeError('')
                 else:
                     return winner, best_score
         

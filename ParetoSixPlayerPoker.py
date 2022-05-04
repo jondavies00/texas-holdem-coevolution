@@ -17,8 +17,10 @@ class Game():
 
     def __init__(self, test, small_blind, max_hands, starting_chips=1000):
         '''
-        Initialise the tournament.
-        bb_doubling_speed: How quickly the tournament progresses. Doubling speed of 20 = big blind doubles every 20 hands.
+        Initialise the game.
+        test: which type of players to use
+        small_blind: the small blind of the poker game
+        max_hands: how many hands to play before stopping
         starting_chips: How many poker chips each player starts with.
         '''
         self.random = False
@@ -42,6 +44,8 @@ class Game():
             p1, p2, p3, p4, p5, p6 = NeuralPlayer('Player 1'), TAGPlayer('Player 2'), LAGPlayer('Player 3'), LPPlayer('Player 4'), TPPlayer('Player 5'), choice([TAGPlayer('Player 6'), LAGPlayer('Player 6'), LPPlayer('Player 6'), TPPlayer('Player 6')])
         elif test == 'evaluate-lag':
             p1, p2, p3, p4, p5, p6 = NeuralPlayer('Player 1'), LAGPlayer('Player 2'), LAGPlayer('Player 3'), LAGPlayer('Player 3'), LAGPlayer('Player 4'), LAGPlayer('Player 5')
+        elif test == 'evaluate-tag':
+            p1, p2, p3, p4, p5, p6 = NeuralPlayer('Player 1'), TAGPlayer('Player 2'), TAGPlayer('Player 3'), TAGPlayer('Player 3'), TAGPlayer('Player 4'), TAGPlayer('Player 5')
         elif test == 'testrandvstag':
             p1, p2, p3, p4, p5, p6 = TAGPlayer('Player 1'), RandomPlayer('Player 2'), RandomPlayer('Player 3'), RandomPlayer('Player 4'), RandomPlayer('Player 5'), RandomPlayer('Player 6')
         elif test == 'evolve+hardcoded':
@@ -348,6 +352,9 @@ class Game():
         if self.pprint: print('Round over, %s players left, %i in the pot' % (str(len(self.players) - out), self.pot))
 
     def calculate_showdown(self):
+        '''
+        Calculate who wins in a showdown.
+        '''
         p_left = [p for p in self.players if not p.out]
         winners, score = self.showdown(p_left)
         for p in p_left:
@@ -364,7 +371,6 @@ class Game():
                     if winners[0].evolve: winners[0].fitness -= 10
                     p.out_of_tournament = True
         else:
-            # TODO: Must have a way to deal with side pots
             if self.pprint: print('chop pot!')
             each_gain = self.pot / len(p_left)
             if int(each_gain) < each_gain:
@@ -381,14 +387,17 @@ class Game():
             if self.pprint: print(winners)
 
     def all_in_showdown(self, players_left):
-            all_in = 0
-            for p in self.players:
-                if p.all_in:
-                    all_in +=1
-            if players_left - all_in < 2:
-                return True
-            else:
-                return False
+        '''
+        Given a list of players who are left, return whether play should continue.
+        '''
+        all_in = 0
+        for p in self.players:
+            if p.all_in:
+                all_in +=1
+        if players_left - all_in < 2:
+            return True
+        else:
+            return False
 
     def showdown(self, players):
         '''
@@ -528,13 +537,13 @@ class Game():
                         #if we've exhausted the number of possible kickers (highest five cards)
                         return same_handed, best_score
                 if p_win == None:
-                    raise TypeError('Shits FUcked')
+                    raise TypeError('Winning player not assigned')
                 return p_win, best_score
                 
             else:
                 winner = same_handed
                 if winner == None:
-                    raise TypeError('Shits FUcked')
+                    raise TypeError('Winning player not assigned')
                 else:
                     return winner, best_score
         
@@ -590,6 +599,9 @@ class Game():
     # GETTERS
 
     def get_player_history(self, p_name):
+        '''
+        Given a player name, get their chip history.
+        '''
         players_chip_history = []
         player = [p for p in self.players if p.name == p_name][0]
 
@@ -597,7 +609,7 @@ class Game():
         return players_chip_history
 
     def get_winner(self):
-            return self.winner
+        return self.winner
 
     def get_hand_count(self):
         '''
@@ -645,6 +657,9 @@ class Game():
     # UTILITY FUNCTIONS
 
     def update_chip_matrix(self, player):
+        '''
+        Update the pareto chip matrix for the given player.
+        '''
         i = self.original_players.index(player)
         for l in range(6):
             p = self.original_players[l]
@@ -732,13 +747,12 @@ class Game():
             return False
         
     def hand_won(self, player):
+        '''
+        Synthesises operations for a winning player.
+        '''
         if self.pprint: print('%s wins the hand' % player.position)
         if player.evolve: player.fitness += 1
         player.add_to_stack(self.pot)
-
-    def check_bigger_winner(self, players):
-        for p in players:
-            pass
 
     def assign_bot_strategy(self, strategy, playerNo):
         for p in self.original_players:
@@ -746,6 +760,9 @@ class Game():
                 p.assignStrategy(strategy)
 
     def assign_network_weights(self, preweights,postweights, playerNo):
+        '''
+        Given the network weights, and the player number, set the neural network.
+        '''
         for p in self.original_players:
             if p.bot and self.original_players.index(p) == playerNo:
                 p.setPreflopWeights(preweights)
@@ -759,6 +776,7 @@ class Game():
         return [c.rank for c in cards]
 
     def check_same_cards(self, players, number_of_kickers, cards_left):
+        ### Unused function
         player_and_kicker = {}
         for p in players:
             player_and_kicker[p] = p.win_combo
@@ -797,10 +815,10 @@ class Game():
                 return players
             else:
                 if max(player_and_kicker, key=player_and_kicker.get) == None:
-                    raise TypeError('shits fucked')
+                    raise TypeError("Player and kicker not assigned.")
                 return [max(player_and_kicker, key=player_and_kicker.get)]
     
-    # STATIC METHODS (not object dependent)
+    # STATIC METHODS
 
     @staticmethod
     def is_royal_flush(cards):
@@ -1055,6 +1073,10 @@ class Game():
 
 
 class Player(object):
+
+    ''' 
+    Class of the player that can take many forms.
+    '''
 
     def __init__(self, name):
         self.name = name
@@ -1378,15 +1400,16 @@ class NeuralPlayer(Player):
                 return (5,4) #raise
 
 class PokerNetwork:
+    '''
+    Defines the ANN to be used by the poker strategy coevolution
+    '''
     def __init__(self, numInput, numHidden1, numOutput):
         self.fitness = 0
         self.numInput = numInput + 1 # Add bias node from input to hidden layer 1 only
         self.numHidden1 = numHidden1 # Feel free to adapt the code to add more biases if you wish
-        #self.numHidden2 = numHidden2
         self.numOutput = numOutput
 
         self.w_i_h1 = np.random.randn(self.numHidden1, self.numInput) 
-        #self.w_h1_h2 = np.random.randn(self.numHidden2, self.numHidden1) 
         self.w_h1_o = np.random.randn(self.numOutput, self.numHidden1)
 
         self.ReLU = lambda x : max(0,x)
@@ -1401,30 +1424,21 @@ class PokerNetwork:
 
         h1 = np.dot(self.w_i_h1, inputsBias)         # feed input to hidden layer 1
         h1 = [self.ReLU(x) for x in h1]              # Activate hidden layer1
-        
-        # h2 = np.dot(self.w_h1_h2, h1)                 # feed layer 1 to hidden layer 2
-        # h2 = [self.ReLU(x) for x in h2]              # Activate hidden layer 2
 
         output = np.dot(self.w_h1_o, h1)             # feed to output layer
-        #output = [self.sigmoid(x) for x in output]   # Activate output layer
+
         return self.softmax(output)
 
     def getWeightsLinear(self):
         flat_w_i_h1 = list(self.w_i_h1.flatten())
-        #flat_w_h1_h2 = list(self.w_h1_h2.flatten())
         flat_w_h1_o = list(self.w_h1_o.flatten())
         return( flat_w_i_h1 + flat_w_h1_o )
 
     def setWeightsLinear(self, Wgenome):
         numWeights_I_H1 = self.numHidden1 * self.numInput
-        #numWeights_H1_H2 = self.numHidden2 * self.numHidden1
-        numWeights_H1_O = self.numOutput * self.numHidden1
 
         self.w_i_h1 = np.array(Wgenome[:numWeights_I_H1])
         self.w_i_h1 = self.w_i_h1.reshape((self.numHidden1, self.numInput))
-        
-        # self.w_h1_h2 = np.array(Wgenome[numWeights_I_H1:(numWeights_H1_H2+numWeights_I_H1)])
-        # self.w_h1_h2 = self.w_h1_h2.reshape((self.numHidden2, self.numHidden1))
 
         self.w_h1_o = np.array(Wgenome[numWeights_I_H1:])
         self.w_h1_o = self.w_h1_o.reshape((self.numOutput, self.numHidden1))

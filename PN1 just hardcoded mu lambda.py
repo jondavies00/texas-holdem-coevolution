@@ -1,26 +1,15 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from pickle import TRUE
 import random
-import math
-from datetime import datetime
-from re import L
-from joblib import Parallel
 import numpy as np
-import poker
 import sys
 import sys
-import matplotlib.pyplot as plt
-from pathos.multiprocessing import ProcessingPool as Pool
 import multiprocessing as mp
-import time
+
 # insert at 1, 0 is the script path (or '' in REPL)
 sys.path.insert(1, r'C:\Users\jonat\OneDrive\Documents\Computer Science Degree\Year 3\Project\Implementation\poker')
 import ParetoSixPlayerPoker as spp
-import cProfile
-import pstats
-import copy
 import pickle as pickle
 
 from deap import base
@@ -45,7 +34,7 @@ POSTFLOP_SIZE = (((numInputNodes2+1) * numHiddenNodes2) + (numHiddenNodes2 * num
 
 IND_SIZE = PREFLOP_SIZE + POSTFLOP_SIZE
 
-#Just an attempt to see if only using hardcoded evaluation produces good strategy
+# Python script that evolves a 'good' player to seed in the coevolution scripts.
 
 def evaluatePlayer(indiv):
     '''Play the player against the hardcoded strategy'''

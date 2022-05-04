@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# This implementation uses the NGSA algorithm for the multiobjective selection, as well as deterministic crowding and the 
+# use of ancestral opponents for evolution
+
 import random
 import math
 import numpy as np
 import sys
 import sys
-from pathos.multiprocessing import ProcessingPool as Pool
 import multiprocessing as mp
-import time
+
 # insert at 1, 0 is the script path (or '' in REPL)
 sys.path.insert(1, r'C:\Users\jonat\OneDrive\Documents\Computer Science Degree\Year 3\Project\Implementation\poker')
 import ParetoSixPlayerPoker as spp
@@ -37,9 +39,6 @@ POSTFLOP_SIZE = (((numInputNodes2+1) * numHiddenNodes2) + (numHiddenNodes2 * num
 
 IND_SIZE = PREFLOP_SIZE + POSTFLOP_SIZE
 
-# This implementation uses the NGSA algorithm for the multiobjective selection, as well as deterministic crowding and the 
-# use of ancestral opponents for evolution
-
 def assignToMatrix(six_indivs, indiv_matrix):
     ''' Takes a six individual matrix (6x6) and assigns the players to the relevant places in the whole matrix'''
     for row_number in range(np.shape(indiv_matrix)[1]):
@@ -49,7 +48,6 @@ def assignToMatrix(six_indivs, indiv_matrix):
             if i != row_number:
                 PARETO_MATRIX[player.id-1][target.id-1] = indiv_matrix[row_number][i]
    
-    
 def paretoDominates(player, target):
     '''Returns true if the player pareto dominates the target'''
     dominating = True
@@ -283,10 +281,28 @@ stats.register("max", np.max)
 def eaMuPlusLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen, stats=None,
              halloffame=None, verbose=__debug__):
 
-    population = pickle.load(open("Gathering Results\saves\One-Population Coevolution with NGSA and Mu+Lambda and deterministic crowding and HOF\Attempt 3 (all seeded)\population_gen100.p", 'rb'))
+    invalid_ind=[ind for ind in population if not ind.fitness.valid]
+    
+    results = []
+    async_results = []
+    for i in range(evals):
+        with mp.Pool(mp.cpu_count()) as pool:
+            async_results.append(pool.apply_async(playPopulation, (invalid_ind,max_hands)))
+            pool.close()
+            pool.join()
+        results += async_results[0].get()
+
+    for t in results:
+
+        assignToMatrix(t[0],t[1])
+
+        fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+
+    for ind, fit in zip(invalid_ind, fitnesses):
+        ind.fitness.values = fit
 
     # Begin the generational process
-    for gen in range(100, ngen + 1):
+    for gen in range(1, ngen + 1):
         print("GEN: %i" % gen)
 
         offspring = algorithms.varOr(population, toolbox,lambda_, cxpb, mutpb)
@@ -298,7 +314,6 @@ def eaMuPlusLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen, stats=No
 
         invalid_ind=[ind for ind in offspring if not ind.fitness.valid]
     
-        t1 = time.time()
         results = []
         async_results = []
         for i in range(evals):
@@ -328,7 +343,6 @@ def eaMuPlusLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen, stats=No
 
         # This is ONLY for recording how individuals change
         pickle.dump(population, open("Gathering Results/saves/One-Population Coevolution with NGSA and Mu+Lambda and deterministic crowding and HOF/Attempt 3 (all seeded)/population_gen%i.p" % gen, 'wb'))
-        # pickle.dump(logbook, "saves/One-Population Coevolution with NGSA and Mu+Lambda/logbook_gen%i" % gen)
 
     return population, logbook
 

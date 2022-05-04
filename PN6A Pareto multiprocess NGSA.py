@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from pickle import TRUE
+### Performs six-population pareto coevolution with Mu+Lambda ES
+
+
 import random
 import numpy as np
 import sys
-from pathos.multiprocessing import ProcessingPool as Pool
+
 import multiprocessing as mp
 # insert at 1, 0 is the script path (or '' in REPL)
 sys.path.insert(1, r'C:\Users\jonat\OneDrive\Documents\Computer Science Degree\Year 3\Project\Implementation\poker')

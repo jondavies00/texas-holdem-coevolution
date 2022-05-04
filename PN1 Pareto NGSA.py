@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# This implementation uses the NGSA algorithm for the multiobjective selection
+
 import random
-from re import L
+
 import numpy as np
 import sys
 import sys
-from pathos.multiprocessing import ProcessingPool as Pool
+
 import multiprocessing as mp
 # insert at 1, 0 is the script path (or '' in REPL)
 sys.path.insert(1, r'C:\Users\jonat\OneDrive\Documents\Computer Science Degree\Year 3\Project\Implementation\poker')
@@ -31,14 +33,11 @@ numHiddenNodes2 = 5
 numOutputNodes2 = 3
 
 PREFLOP_SIZE = (((numInputNodes1+1) * numHiddenNodes1) + (numHiddenNodes1 * numOutputNodes1))
-#print(PREFLOP_SIZE)
+
 POSTFLOP_SIZE = (((numInputNodes2+1) * numHiddenNodes2) + (numHiddenNodes2 * numOutputNodes2))
 
 IND_SIZE = PREFLOP_SIZE + POSTFLOP_SIZE
 
-# This implementation uses the NGSA algorithm for the multiobjective selection
-
-# Seed a few hardcoded strategies in the population who don't evolve
 
 def assignToMatrix(six_indivs, indiv_matrix):
     ''' Takes a six individual matrix (6x6) and assigns the players to the relevant places in the whole matrix'''
@@ -48,8 +47,8 @@ def assignToMatrix(six_indivs, indiv_matrix):
             target = six_indivs[i]
             if i != row_number:
                 PARETO_MATRIX[player.id-1][target.id-1] = indiv_matrix[row_number][i]
-    #print(PARETO_MATRIX)
-    
+
+  
 def paretoDominates(player, target):
     '''Returns true if the player pareto dominates the target'''
     dominating = True
@@ -241,6 +240,7 @@ PARETO_MATRIX = np.zeros((total_players, total_players))
 
 pop = toolbox.population(size=total_players, ids=0)
 
+# Seed the population
 # evolvedIndiv = pickle.load(open("Gathering Results/saves/Adapted Hardcoded Strategy/p1.p", 'rb'))
 
 # for i in range(10):

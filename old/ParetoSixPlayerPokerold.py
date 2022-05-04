@@ -42,8 +42,6 @@ class Game():
             p1, p2, p3, p4, p5, p6 = NeuralPlayer('Player 1'), TAGPlayer('Player 2'), LAGPlayer('Player 3'), LPPlayer('Player 4'), TPPlayer('Player 5'), choice([TAGPlayer('Player 6'), LAGPlayer('Player 6'), LPPlayer('Player 6'), TPPlayer('Player 6')])
         elif test == 'evaluate-lag':
             p1, p2, p3, p4, p5, p6 = NeuralPlayer('Player 1'), LAGPlayer('Player 2'), LAGPlayer('Player 3'), LAGPlayer('Player 3'), LAGPlayer('Player 4'), LAGPlayer('Player 5')
-        elif test == 'evaluate-tag':
-            p1, p2, p3, p4, p5, p6 = NeuralPlayer('Player 1'), TAGPlayer('Player 2'), TAGPlayer('Player 3'), TAGPlayer('Player 3'), TAGPlayer('Player 4'), TAGPlayer('Player 5')
         elif test == 'testrandvstag':
             p1, p2, p3, p4, p5, p6 = TAGPlayer('Player 1'), RandomPlayer('Player 2'), RandomPlayer('Player 3'), RandomPlayer('Player 4'), RandomPlayer('Player 5'), RandomPlayer('Player 6')
         elif test == 'evolve+hardcoded':
@@ -530,13 +528,13 @@ class Game():
                         #if we've exhausted the number of possible kickers (highest five cards)
                         return same_handed, best_score
                 if p_win == None:
-                    raise TypeError('Shits FUcked')
+                    raise TypeError('')
                 return p_win, best_score
                 
             else:
                 winner = same_handed
                 if winner == None:
-                    raise TypeError('Shits FUcked')
+                    raise TypeError('')
                 else:
                     return winner, best_score
         

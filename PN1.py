@@ -1,24 +1,19 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+### Performs single-objective coevolution
+
 import random
-import math
-from datetime import datetime
-from re import L
-from attr import evolve
 import numpy as np
-import poker
+
 import sys
 import sys
-import matplotlib.pyplot as plt
-from pathos.multiprocessing import ProcessingPool as Pool
+
 import multiprocessing
-import time
 # insert at 1, 0 is the script path (or '' in REPL)
 sys.path.insert(1, r'C:\Users\jonat\OneDrive\Documents\Computer Science Degree\Year 3\Project\Implementation\poker')
-import SixPlayerPoker as spp
-import cProfile
-import pstats
+import ParetoSixPlayerPoker as spp
+
 import copy
 import pickle
 
@@ -188,13 +183,10 @@ def initIndividual(weights, id):
     return ind
 
 toolbox = base.Toolbox()
-#toolbox.register("attr_float", random.uniform, -1.0, 1.0)
 
 toolbox.register("individual", initIndividual, creator.Individual,
                 id=None)
 toolbox.register("evaluate", evaluatePopulation)
-
-
 
 toolbox.register("select", tools.selTournament, tournsize=5)
 
@@ -206,10 +198,10 @@ def initPopulation(inds, ind_init, size, ids):
     return inds(ind_init(id = ids) for i in range(size))
 
 toolbox.register("population", initPopulation, list, toolbox.individual, size=1, ids=None)
-#print(IND_SIZE)
+
 
 original = 100 # Must be a multiple of 6
-seeded = 1
+seeded = 10
 total_players = original + seeded
 
 #Create 6 populations of 20 players with relevant ids
@@ -298,6 +290,5 @@ hof = tools.HallOfFame(6)
 if __name__ == "__main__":
     pool = multiprocessing.Pool(multiprocessing.cpu_count())
     toolbox.register("map", pool.map)
-
 
     pop = eaSimple(pop, toolbox, CXPB, MUTPB, NGEN,pool, stats, hof)

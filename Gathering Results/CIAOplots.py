@@ -98,7 +98,7 @@ def gatherDataOnePop(gens, file_loc):
     This function plays the best player in each population against the best player in the previous generation's population.
     For the first generation
     '''
-    evals = 10
+    evals = 1
     pop_data = []
     for i in range(1, gens+1):
         pop_data.append(pickle.load(open(file_loc + "/population_gen%i.p" % i, 'rb'))) 
@@ -259,78 +259,6 @@ def plotAvgPopFitness(gens, file_loc, fn, type, evals=1, pop=None):
             gen_data.append((mean_chips/evals) - 1000)
         all_data.append(gen_data)
     pickle.dump(all_data, open("fitnesses/" + fn + ".p", 'wb'))
-
-# def plotAvgPopFitnessVsEasySixPop(gens, file_loc, fn, pop):
-#     evals = 1
-#     pop_data = []
-#     for i in range(1, gens+1):
-#         pop_data.append(pickle.load(open(file_loc + "population%i_gen%i.p" % (pop,i), 'rb'))) 
-#     gen_data = []
-#     all_data = []
-#     for i,g in enumerate(pop_data):
-#         mean_chips = 0
-#         print(i)
-#         gen_data = []
-#         for ind in g:
-#             mean_chips = 0
-            
-#             for i in range(evals):
-#                 #print(i)
-#                 game = spp.Game('evaluate-lag', 2, 200)
-#                 game.assign_network_weights(ind[:PREFLOP_SIZE], ind[PREFLOP_SIZE:], 0)
-#                 game.begin()
-#                 mean_chips += game.get_player_chip_count(0)
-#             gen_data.append((mean_chips/evals) - 1000)
-#         #print(np.mean(gen_data))
-#         all_data.append(gen_data)
-#     pickle.dump(all_data, open("fitnesses/" + fn + ".p", 'wb'))
-
-# def plotAvgPopFitnessVsHardSixPop(gens, file_loc, fn, pop):
-#     evals = 1
-#     pop_data = []
-#     for i in range(1, gens+1):
-#         pop_data.append(pickle.load(open(file_loc + "population%i_gen%i.p" % (pop,i), 'rb'))) 
-#     gen_data = []
-#     all_data = []
-#     for g,p in enumerate(pop_data):
-#         mean_chips = 0
-#         print(g)
-#         for ind in pop_data[g]:
-#             mean_chips = 0
-#             gen_data = []
-#             for i in range(evals):
-#                 #print(i)
-#                 game = spp.Game('evaluate-tag', 2, 200)
-#                 game.assign_network_weights(ind[:PREFLOP_SIZE], ind[PREFLOP_SIZE:], 0)
-#                 game.begin()
-#                 mean_chips += game.get_player_chip_count(0)
-#             gen_data.append((mean_chips/evals) - 1000)
-#         all_data.append(gen_data)
-#     pickle.dump(all_data, open("fitnesses/" + fn + ".p", 'wb'))
-    
-# def plotAvgPopFitnessVsRandSixPop(gens, file_loc, fn, pop):
-#     evals = 1
-#     pop_data = []
-#     for i in range(1, gens+1):
-#         pop_data.append(pickle.load(open(file_loc + "population%i_gen%i.p" % (pop,i), 'rb'))) 
-#     gen_data = []
-#     all_data = []
-#     for g,p in enumerate(pop_data):
-#         mean_chips = 0
-#         print(g)
-#         for ind in pop_data[g]:
-#             mean_chips = 0
-#             gen_data = []
-#             for i in range(evals):
-#                 #print(i)
-#                 game = spp.Game('rand', 2, 200)
-#                 game.assign_network_weights(ind[:PREFLOP_SIZE], ind[PREFLOP_SIZE:], 0)
-#                 game.begin()
-#                 mean_chips += game.get_player_chip_count(0)
-#             gen_data.append((mean_chips/evals) - 1000)
-#             print(gen_data[0])
-#         all_data.append(gen_data)
-#     pickle.dump(all_data, open("fitnesses/" + fn + ".p", 'wb'))
     
 def getCIAOPlotsSixPop(file_location, gens, CIAO_name):
     '''
@@ -349,43 +277,101 @@ def getCIAOPlotsOnePop(file_location, gens, CIAO_name):
     pixel_data = normalisedFitness(fitness_data)
     generateImage(pixel_data, gens, CIAO_name)
 
-def plotData(fn, save_fn):
+def plotData(fn, save_fn, pops):
     '''
-    Saves a graph of the mean fitnesses throughout the generations
+    Saves a graph of the mean fitnesses of each method throughout the generations
     '''
-    all_gens_data = pickle.load(open(fn, 'rb'))
-    plot_data = []
+    all_gens_data = []
+    all_gens_data.append(pickle.load(open(fn + "fitnessvseasy.p", 'rb')))
+    all_gens_data.append(pickle.load(open(fn + "fitnessvshard.p", 'rb')))
+    all_gens_data.append(pickle.load(open(fn + "fitnessvsrand.p", 'rb')))
+    plot_data = [[],[],[]]
     max_ave_fitness = -10000
     min_ave_fitness = 10000
-    for g in all_gens_data:
-        plot_data.append(np.mean(g))
-        if np.mean(g) > max_ave_fitness:
-            max_ave_fitness = np.mean(g)
-        if np.mean(g) < min_ave_fitness:
-            min_ave_fitness = np.mean(g)
-    plt.plot(range(len(plot_data)), plot_data)
+    for i in range(3):
+        for g in all_gens_data[i]:
+            plot_data[i].append(np.mean(g))
+            if np.mean(g) > max_ave_fitness:
+                max_ave_fitness = np.mean(g)
+            if np.mean(g) < min_ave_fitness:
+                min_ave_fitness = np.mean(g)
+        plt.plot(range(len(plot_data[i])), plot_data[i])
+    if pops == 1:
+        title = "Average fitness over generations"
+    else:
+        title = "Average fitness over generations in population 1"
+    plt.legend(["fitness vs easy", "fitness vs hard", "fitness vs random"])
     plt.xlabel("Generation")
     plt.ylabel("Average Fitness")
-    plt.title("Average fitness over generations in population 1")
+    plt.title(title)
     plt.savefig("Gathering Results/plots/fitness plots/" + save_fn + ".png")
     print("MAX FITNESS: %i MIN FITNESS: %i" % (max_ave_fitness, min_ave_fitness))
     #plt.show()
-    
+def plotEvolvedvsHardcoded():
+    evolvedIndiv = pickle.load(open("Gathering Results/saves/Adapted Hardcoded Strategy/p1.p", 'rb'))
+    times = 100
+    evals = 5
+    gen_data = []
+    mean_chips = 0
+    p2_data = []
+    p3_data = []
+    p4_data = []
+    p5_data = []
+    p6_data = []
+    for i in range(times):
+        print(i)
+        mean_chips = 0
+        m2, m3, m4, m5, m6 = 0, 0, 0, 0, 0
+        for e in range(evals):
+            game = spp.Game("evaluate-tag", 2, 200)
+            game.assign_network_weights(evolvedIndiv[:PREFLOP_SIZE], evolvedIndiv[PREFLOP_SIZE:], 0)
+            game.begin()
+            mean_chips += game.get_player_chip_count(0)
+            m2+=game.get_player_chip_count(1)
+            m3+=game.get_player_chip_count(2)
+            m4+=game.get_player_chip_count(3)
+            m5+=game.get_player_chip_count(4)
+            m6+=game.get_player_chip_count(5)
+        gen_data.append((mean_chips/ evals) - 1000)
+        p2_data.append((m2/ evals) - 1000)
+        p3_data.append((m3/ evals) - 1000)
+        p4_data.append((m4/ evals) - 1000)
+        p5_data.append((m5/ evals) - 1000)
+        p6_data.append((m6/ evals) - 1000)
+        
+
+    plt.plot(range(times), gen_data)
+    plt.plot(range(times), p2_data)
+    plt.plot(range(times), p3_data)
+    plt.plot(range(times), p4_data)
+    plt.plot(range(times), p5_data)
+    plt.plot(range(times), p6_data)
+    plt.legend(["Evolved Individual", "TAG 1", "TAG 2", "TAG 3", "TAG 4", "TAG 5"])
+    plt.xlabel("Times ran")
+    plt.ylabel("Mean chips after 5 games")
+    plt.title("Average results of the evolved strategy vs the TAG (strong) strategy")
+    plt.savefig("Gathering Results/plots/fitness plots/" + "evolvedindiv" + ".png")
 #getCIAOPlotsOnePop("saves/One-Population Coevolution with NGSA and Mu+Lambda and deterministic crowding and HOF/Attempt 2 (all seeded)", 100, "CIAO One Pop NGSA ML Seeded")
 # print("One pop reg")
 # plotAvgPopFitness(100, "saves/One-Population Coevolution (no NGSA or mu lambda)/", "1PRegfitnessvshard", "hard")
 # plotAvgPopFitness(100, "saves/One-Population Coevolution (no NGSA or mu lambda)/", "1PRegfitnessvseasy", "easy")
 # plotAvgPopFitness(100, "saves/One-Population Coevolution (no NGSA or mu lambda)/", "1PRegfitnessvsrand", "rand")
-print("One pop NGSA and ML")
-plotAvgPopFitness(100, "saves/One-Population Coevolution with NGSA and Mu+Lambda/Attempt 1 (seeded)/", "1PPfitnessvshard", "hard")
-plotAvgPopFitness(100, "saves/One-Population Coevolution with NGSA and Mu+Lambda/Attempt 1 (seeded)/", "1PPfitnessvseasy", "easy")
-plotAvgPopFitness(100, "saves/One-Population Coevolution with NGSA and Mu+Lambda/Attempt 1 (seeded)/", "1PPfitnessvsrand", "rand")
-print("Six pop reg")
-plotAvgPopFitness(100, "saves/Six-Population Pareto Coevolution (no NGSA or mu lambda)/", "6PRegfitnessvshard", "hard", pop=0)
-plotAvgPopFitness(100, "saves/Six-Population Pareto Coevolution (no NGSA or mu lambda)/", "6PRegfitnessvseasy", "easy", pop=0)
-plotAvgPopFitness(100, "saves/Six-Population Pareto Coevolution (no NGSA or mu lambda)/", "6PRegfitnessvsrand", "rand", pop=0)
-print("Six pop NGSA and ML")
-plotAvgPopFitness(100, "saves/Six-Population Pareto Coevolution NGSA/Attempt 2 (using)/", "6PPfitnessvshard", "hard", pop=0)
-plotAvgPopFitness(100, "saves/Six-Population Pareto Coevolution NGSA/Attempt 2 (using)/", "6PPfitnessvseasy", "easy", pop=0)
-plotAvgPopFitness(100, "saves/Six-Population Pareto Coevolution NGSA/Attempt 2 (using)/", "6PPfitnessvsrand", "rand", pop=0)
-#plotData("Gathering Results/fitnesses/1PHOFDCfitnessvsrand.p", "1PHOFDCfitnessvsrand")
+# print("One pop NGSA and ML")
+# plotAvgPopFitness(100, "saves/One-Population Coevolution with NGSA and Mu+Lambda/Attempt 1 (seeded)/", "1PPfitnessvshard", "hard")
+# plotAvgPopFitness(100, "saves/One-Population Coevolution with NGSA and Mu+Lambda/Attempt 1 (seeded)/", "1PPfitnessvseasy", "easy")
+# plotAvgPopFitness(100, "saves/One-Population Coevolution with NGSA and Mu+Lambda/Attempt 1 (seeded)/", "1PPfitnessvsrand", "rand")
+
+# print("Six pop reg")
+# plotAvgPopFitness(100, "saves/Six-Population Reg Coevolution/", "6PRegfitnessvshard", "hard", pop=0)
+# plotAvgPopFitness(100, "saves/Six-Population Reg Coevolution/", "6PRegfitnessvseasy", "easy", pop=0)
+# plotAvgPopFitness(100, "saves/Six-Population Reg Coevolution/", "6PRegfitnessvsrand", "rand", pop=0)
+# print("Six pop NGSA and ML")
+# plotAvgPopFitness(100, "saves/Six-Population Pareto Coevolution NGSA/Attempt 2 (using)/", "6PPfitnessvshard", "hard", pop=0)
+# plotAvgPopFitness(100, "saves/Six-Population Pareto Coevolution NGSA/Attempt 2 (using)/", "6PPfitnessvseasy", "easy", pop=0)
+# plotAvgPopFitness(100, "saves/Six-Population Pareto Coevolution NGSA/Attempt 2 (using)/", "6PPfitnessvsrand", "rand", pop=0)
+#plotData("Gathering Results/fitnesses/6PHOFDC", "6PHOFDCfitnessvsall", 6)
+#plotData("Gathering Results/fitnesses/6PPfitnessvseasy.p", "6PPfitnessvseasy")
+#plotData("Gathering Results/fitnesses/6PPfitnessvsrand.p", "6PPfitnessvsrand")
+#getCIAOPlotsSixPop("saves/Six-Population Reg Coevolution", 100, "CIAO Six Pop Regular")
+# plotEvolvedvsHardcoded()
+getCIAOPlotsOnePop("saves/One-Population Coevolution with NGSA and Mu+Lambda/Attempt 2 (not seeded)/", 100, "CIAO One Pop NGSA ML")

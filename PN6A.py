@@ -1,16 +1,19 @@
 #!/usr/bin/env python
 # coding: utf-8
+
+### Performs six-population single-objective coevolution
+
 import random
 import numpy as np
 import sys
 import sys
-from pathos.multiprocessing import ProcessingPool as Pool
+
 import multiprocessing
 # insert at 1, 0 is the script path (or '' in REPL)
 sys.path.insert(1, r'C:\Users\jonat\OneDrive\Documents\Computer Science Degree\Year 3\Project\Implementation\poker')
-import SixPlayerPoker as spp
-import cProfile
+import ParetoSixPlayerPoker as spp
 import pickle
+import copy
 
 from deap import base
 from deap import creator
@@ -173,9 +176,9 @@ def initPopulation(inds, ind_init, size, ids):
 toolbox.register("population", initPopulation, list, toolbox.individual, size=1, ids=None)
 #print(IND_SIZE)
 
-total_players = 600 # Must be a multiple of 6
+total_players = 300 # Must be a multiple of 6
 
-players_per_pop = 588 // 6
+players_per_pop = 300 // 6
 
 
 
@@ -275,41 +278,18 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, pool, stats=None,
         for i in range(evals):
             results = addFitnessLists(results, toolbox.evaluate(population))
 
-        fitnesses = divFitnessList(results, evals) # generates an average fitness over 5 games
-        #fitnesses = divFitnessList(results, 5) # generates an average fitness over 5 games
+        fitnesses = divFitnessList(results, evals) # generates an average fitness 
+
 
         for i in range(len(invalid_ind)):
             for ind, fit in zip(invalid_ind[i], fitnesses[i]):
                 ind.fitness.values = fit
-        # Play the hall of fame individuals with the best individual from each population (to measure perforamnce)
-        # for i in range(6):
-        #     of = evaluateHOFs([hof[i], hof[i], hof[i], hof[i], hof[i], tools.selBest(offspring[i], 1)[0]])
-        #     objective_fitness[i].append(of[0])
 
-        #Play random individuals against the best from each population to measure performance.
-        # for i in range(6):
-        #     rf = 0
-        #     for e in range(5):
-        #         rf += evaluateRandoms([toolbox.individual(), toolbox.individual(),toolbox.individual(),toolbox.individual(),toolbox.individual(),tools.selBest(offspring[i], 1)[0]])[0]
-        #     objective_fitness[i].append(rf/5)
-        # print(np.mean(objective_fitness))
-
-
-        # Update the hall of fame with the generated individuals
-        # if halloffame is not None:
-        #     for p in offspring:
-        #         halloffame.insert(tools.selBest(p, 1)[0])
-
-        # Replace the current population by the offspring
         population[:] = offspring
 
         for i,p in enumerate(population):
             pickle.dump(p, open("Gathering Results/saves/Six-Population Reg Coevolution/population%i_gen%i.p" % (i, gen), 'wb'))
-        # Append the current generation statistics to the logbook
-        # record = stats.compile(population) if stats else {}
-        #logbook.record(gen=gen, nevals=len(invalid_ind), **record)
-        #if verbose:
-            #print (logbook.stream)
+
 
     return population
 
