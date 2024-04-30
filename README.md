@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This project applies competitive coevolution to poker, and explores the suitability of different methods and techniques. This was designed for my undergraduate dissertation at the University of York ('An Investigation of Co-evolutionary Dynamics Using Six-Handed Texas Hold’em Poker').
+This project applies competitive coevolution to poker, and explores the suitability of different methods and techniques. This was designed for my undergraduate dissertation at the University of York (_An Investigation of Co-evolutionary Dynamics Using Six-Handed Texas Hold’em Poker_).
 
 ## Structure & Usage
 
